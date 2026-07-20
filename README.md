@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SNCT Paulista 2026
 
-## Getting Started
+Plataforma web da Semana Nacional de Ciência e Tecnologia — Paulista 2026. O projeto será desenvolvido de forma incremental para atender o site público, inscrições, credencial digital segura, área do participante, check-in por QR Code, entrega de brindes e administração do evento.
 
-First, run the development server:
+## Tecnologias
 
-```bash
+- Next.js 16 com App Router, React 19 e TypeScript
+- Tailwind CSS 4 e shadcn/ui
+- Inter para texto e Orbitron para destaques
+- ESLint, Prettier e Vitest
+
+## Requisitos
+
+- Node.js 20.9 ou superior
+- npm
+- Git
+- Codex CLI para a configuração dos MCPs de desenvolvimento
+
+## Instalação local
+
+```powershell
+npm install
+Copy-Item .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+O endereço padrão é `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Variáveis de ambiente
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Use `.env.example` como referência. Nunca envie arquivos `.env` ao repositório. A variável `API_KEY_21ST` não pertence ao `.env.example`; configure-a no ambiente de usuário do Windows:
 
-## Learn More
+```powershell
+[Environment]::SetEnvironmentVariable("API_KEY_21ST", "SUA_CHAVE", "User")
+```
 
-To learn more about Next.js, take a look at the following resources:
+Feche e reabra o VS Code depois da alteração. Nunca registre a chave real em documentação, código ou histórico Git.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## MCPs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Os servidores `shadcn` e `21st` estão configurados em `.vscode/mcp.json` e no Codex CLI. O `21st` só será autenticado depois que a variável `API_KEY_21ST` estiver disponível e o VS Code for reiniciado. Verifique o estado com:
 
-## Deploy on Vercel
+```powershell
+codex mcp list
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Para recriar a configuração do shadcn:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```powershell
+npx shadcn@latest mcp init --client vscode
+codex mcp add shadcn -- npx shadcn@latest mcp
+```
+
+Para recriar a configuração do 21st no Codex sem gravar a chave em arquivo:
+
+```powershell
+codex mcp add 21st --url https://21st.dev/api/mcp --bearer-token-env-var API_KEY_21ST
+```
+
+## Scripts
+
+```powershell
+npm run dev
+npm run lint
+npm run typecheck
+npm run test:run
+npm run build
+npm run format
+npm run format:check
+```
+
+## Estrutura
+
+- `src/app`: rotas e layouts do App Router
+- `src/components`: componentes de UI e domínios do sistema
+- `src/config`, `src/constants`: configuração estática e constantes
+- `src/lib`, `src/services`: infraestrutura e serviços
+- `src/validations`: schemas e regras de validação
+- `src/emails`: templates de e-mail
+- `prisma`: schema, migrations e seed do banco
+- `public`: imagens e ativos públicos
+
+## Estado atual
+
+Etapa 1 concluída: inicialização, ferramentas de qualidade, estrutura base, fontes, tema e tokens. A Etapa 2 está parcialmente concluída, com os MCPs registrados e aguardando apenas a configuração segura da chave do 21st.dev para autenticação. Funcionalidades, autenticação, banco de dados, segurança, LGPD, testes de fluxo e Docker serão adicionados nas etapas seguintes e documentados conforme forem implementados.
