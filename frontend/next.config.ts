@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const apiOrigin = process.env.SNCT_API_ORIGIN ?? "http://localhost:4001";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
@@ -19,6 +21,14 @@ const nextConfig: NextConfig = {
         search: "",
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiOrigin}/api/:path*`,
+      },
+    ];
   },
   async headers() {
     const securityHeaders = [

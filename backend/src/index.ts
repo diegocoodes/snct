@@ -21,7 +21,7 @@ import * as documents from "@/routes/documents";
 import * as staff from "@/routes/staff";
 
 const PORT = Number(process.env.PORT ?? 4001);
-const frontendOrigin = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const frontendOrigin = process.env.BETTER_AUTH_URL ?? "http://localhost:4000";
 
 type FetchHandler = (request: Request, ...args: string[]) => Promise<Response>;
 
@@ -62,7 +62,7 @@ const app = express();
 app.disable("x-powered-by");
 app.use(
   cors({
-    origin: [frontendOrigin, "http://127.0.0.1:3000", "http://localhost:3000"],
+    origin: [frontendOrigin, "http://127.0.0.1:4000", "http://localhost:4000"],
     credentials: true,
   }),
 );
@@ -88,6 +88,6 @@ mount("get", "/api/documents/:id", documents.GET);
 assertDatabaseConfigured();
 
 const server = http.createServer(app);
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`SNCT backend (Express) em http://127.0.0.1:${PORT}`);
+server.listen(PORT, "localhost", () => {
+  console.log(`SNCT backend (Express) em http://localhost:${PORT}`);
 });

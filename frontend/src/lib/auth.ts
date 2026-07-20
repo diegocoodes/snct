@@ -10,7 +10,7 @@ import { sendSecurityEmail } from "@/lib/mailer";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import type { PublicUser, SessionData, UserRole } from "@/lib/snct-types";
 
-const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:4000";
 const isProduction = process.env.NODE_ENV === "production";
 
 export const auth = betterAuth({
@@ -221,7 +221,7 @@ export async function ensureBootstrapAdmin() {
     throw new Error("Não foi possível criar o administrador inicial.");
 
   await query(
-    `UPDATE auth_users SET role = 'admin', "emailVerified" = true WHERE id = $1`,
+    "UPDATE auth_users SET role = 'admin', `emailVerified` = true WHERE id = $1",
     [created.user.id],
   );
 }

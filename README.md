@@ -86,41 +86,44 @@ frontend/                 # Aplicação Next.js (UI + Route Handlers)
 ├── docs/                 # Arquitetura, segurança, implantação e operação
 └── .env                  # Variáveis públicas (NEXT_PUBLIC_*)
 
-backend/                  # Infraestrutura de dados e operações
+backend/                  # API Express (Node) + migrações
+├── src/                  # Servidor Express e libs de domínio
 ├── db/migrations/        # Esquema PostgreSQL versionado
 ├── scripts/              # Migração e retenção
-├── compose.yaml          # PostgreSQL e ClamAV para desenvolvimento
 └── .env                  # Segredos e variáveis de servidor / banco
 ```
 
 ## Executando localmente
 
-Requisitos: Node.js 20.9+, npm e uma instância PostgreSQL. Docker é opcional, mas facilita PostgreSQL e ClamAV.
+Requisitos: Node.js 20.9+, npm e **MySQL** instalado na máquina (usuário `root`, senha conforme seu `.env`).
+
+1. Crie o banco (o script de migração também cria se não existir):
+
+```sql
+CREATE DATABASE IF NOT EXISTS snct CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+2. Backend (Express na porta 4001):
 
 ```powershell
-git clone https://github.com/diegocoodes/snct.git
-Set-Location snct
-
-# Backend (banco e serviços locais)
-Set-Location backend
+Set-Location snct\backend
 Copy-Item .env.example .env
+# DATABASE_URL=mysql://root:12345@127.0.0.1:3306/snct
 npm install
-$env:POSTGRES_PASSWORD="defina-uma-senha-local-forte"
-# Atualize POSTGRES_PASSWORD e DATABASE_URL em backend/.env
-npm run docker:up
 npm run db:migrate
-Set-Location ..
+npm run dev
+```
 
-# Frontend (aplicação)
-Set-Location frontend
+3. Frontend (outro terminal):
+
+```powershell
+Set-Location snct\frontend
 Copy-Item .env.example .env
-# Ajuste NEXT_PUBLIC_PRIVACY_CONTACT em frontend/.env
-# Preencha os segredos em backend/.env (carregado automaticamente pelo frontend)
 npm install
 npm run dev
 ```
 
-Acesse `http://localhost:3000`. O Docker não é obrigatório: `DATABASE_URL` pode apontar para um PostgreSQL externo e `CLAMAV_HOST` para um daemon ClamAV acessível pela aplicação.
+Acesse `http://localhost:4000`. O frontend encaminha `/api/*` para o Express em `http://localhost:4001`.
 
 ## Variáveis essenciais
 
@@ -134,15 +137,15 @@ Acesse `http://localhost:3000`. O Docker não é obrigatório: `DATABASE_URL` po
 
 | Variável                                   | Finalidade                                     |
 | ------------------------------------------ | ---------------------------------------------- |
-| `POSTGRES_PASSWORD`                        | Senha do PostgreSQL no Docker Compose          |
-| `DATABASE_URL`                             | Conexão PostgreSQL (app, migrações e retenção) |
-| `BETTER_AUTH_URL`                          | URL canônica HTTPS do portal                   |
+| `PORT`                                     | Porta do Express (padrão `4001`)               |
+| `DATABASE_URL`                             | Conexão MySQL (ex.: `mysql://root:12345@127.0.0.1:3306/snct`) |
+| `BETTER_AUTH_URL`                          | URL do portal (ex.: `http://localhost:4000`)   |
 | `BETTER_AUTH_SECRET`                       | Criptografia e assinatura do Better Auth       |
 | `SNCT_RATE_LIMIT_SECRET`                   | HMAC de IPs e identificadores dos limitadores  |
 | `SNCT_DATA_ENCRYPTION_KEYS`                | Chaves versionadas AES-256-GCM para anexos     |
 | `SNCT_ADMIN_EMAIL` / `SNCT_ADMIN_PASSWORD` | Bootstrap único do administrador               |
 | `SNCT_SMTP_*` / `SNCT_EMAIL_FROM`          | Verificação, recuperação e exclusão por e-mail |
-| `CLAMAV_HOST` / `CLAMAV_PORT`              | Análise antivírus obrigatória em produção      |
+| `CLAMAV_HOST` / `CLAMAV_PORT`              | Antivírus (opcional em dev; obrigatório em prod) |
 
 Os scripts do frontend (`dev`, `build`, `start`, `security:check-env`) carregam automaticamente `backend/.env` além de `frontend/.env`.
 
@@ -153,7 +156,7 @@ Use `frontend/.env.example` e `backend/.env.example` como referência. Nunca env
 ```powershell
 # Frontend
 Set-Location frontend
-npm run dev                # desenvolvimento
+npm run dev                # desenvolvimento (http://localhost:4000)
 npm run build              # build de produção
 npm run start              # executa o build
 npm run security:check-env # valida configuração de produção
@@ -165,7 +168,7 @@ npm run format:check
 
 # Backend
 Set-Location backend
-npm run docker:up          # sobe PostgreSQL e ClamAV
+npm run dev                # API Express (http://localhost:4001)
 npm run db:migrate         # aplica migrações SQL com checksum
 npm run db:cleanup         # aplica a política de retenção
 ```

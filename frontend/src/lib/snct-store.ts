@@ -1,14 +1,12 @@
-import "server-only";
-
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
-import type { PoolClient } from "pg";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import { fileTypeFromBuffer } from "file-type";
 
 import { featuredNotices, upcomingEvents } from "@/config/highlights";
 import { partners } from "@/config/partners";
 import { assertFileIsClean } from "@/lib/clamav";
-import { db, query, transaction } from "@/lib/db";
+import { query, transaction, clientQuery, clientExecute } from "@/lib/db";
 import { decryptFile, encryptFile } from "@/lib/encryption";
 import type {
   ManagedNoticeDocument,
@@ -42,20 +40,23 @@ function iso(value: Date | string | null | undefined) {
 
 async function ensureDomainSeeded() {
   await transaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(736282027)");
-    const settings = await client.query(
+    await clientQuery(client, "SELECT GET_LOCK('snct-seed', 10)");
+    const settings = await clientQuery(
+      client,
       "SELECT id FROM snct_site_settings WHERE id = 1",
     );
     if (settings.rowCount) return;
 
-    await client.query(
+    await clientQuery(
+      client,
       `INSERT INTO snct_site_settings (id, event_edition, hero_image_url)
        VALUES (1, $1, $2)`,
       [defaultSettings.eventEdition, defaultSettings.heroImageUrl],
     );
 
     for (const [index, event] of upcomingEvents.entries()) {
-      await client.query(
+      await clientQuery(
+        client,
         `INSERT INTO snct_events
           (id, event_date, event_time, title, location, sort_order)
          VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -71,7 +72,8 @@ async function ensureDomainSeeded() {
     }
 
     for (const [index, notice] of featuredNotices.entries()) {
-      await client.query(
+      await clientQuery(
+        client,
         `INSERT INTO snct_notices
           (id, title, registration, status, sort_order)
          VALUES ($1, $2, $3, $4, $5)`,
@@ -86,7 +88,8 @@ async function ensureDomainSeeded() {
     }
 
     for (const [index, partner] of partners.entries()) {
-      await client.query(
+      await clientQuery(
+        client,
         `INSERT INTO snct_partners (id, name, logo, sort_order)
          VALUES ($1, $2, $3, $4)`,
         [`partner-${index + 1}`, partner.name, partner.logo, index],
@@ -95,10 +98,13 @@ async function ensureDomainSeeded() {
   });
 }
 
-async function readStore(client: PoolClient = db as unknown as PoolClient) {
+async function readStore(client?: PoolConnection) {
+  const run = <T extends RowDataPacket>(text: string, values: unknown[] = []) =>
+    client ? clientQuery<T>(client, text, values) : query<T>(text, values);
+
   const [users, events, notices, documents, managedPartners, settings] =
     await Promise.all([
-      client.query<{
+      run<{
         id: string;
         name: string;
         email: string;
@@ -115,58 +121,58 @@ async function readStore(client: PoolClient = db as unknown as PoolClient) {
         guardian_consent_at: Date | null;
         qr_expires_at: Date | null;
         qr_revoked_at: Date | null;
-      }>(`
+      } & RowDataPacket>(`
         SELECT users.id, users.name, users.email, users.role,
-               users."emailVerified" AS email_verified,
-               users."twoFactorEnabled" AS two_factor_enabled,
-               users."createdAt" AS created_at,
+               users.\`emailVerified\` AS email_verified,
+               users.\`twoFactorEnabled\` AS two_factor_enabled,
+               users.\`createdAt\` AS created_at,
                profiles.age, profiles.visitor_hash, profiles.checked_in_at,
                profiles.gift_delivered_at, profiles.privacy_accepted_at,
                profiles.privacy_version, profiles.guardian_consent_at,
                profiles.qr_expires_at, profiles.qr_revoked_at
         FROM auth_users AS users
         LEFT JOIN snct_profiles AS profiles ON profiles.user_id = users.id
-        ORDER BY users."createdAt" ASC
+        ORDER BY users.\`createdAt\` ASC
       `),
-      client.query<{
+      run<{
         id: string;
         event_date: string;
         event_time: string;
         title: string;
         location: string;
-      }>(`
+      } & RowDataPacket>(`
         SELECT id, event_date, event_time, title, location
         FROM snct_events ORDER BY sort_order, created_at
       `),
-      client.query<{
+      run<{
         id: string;
         title: string;
         registration: string;
         status: "aberto" | "encerrado";
-      }>(`
+      } & RowDataPacket>(`
         SELECT id, title, registration, status
         FROM snct_notices ORDER BY sort_order, created_at
       `),
-      client.query<{
+      run<{
         id: string;
         notice_id: string;
         original_name: string;
         storage_name: string;
         mime_type: string;
         byte_size: number;
-      }>(`
+      } & RowDataPacket>(`
         SELECT id, notice_id, original_name, storage_name, mime_type, byte_size
         FROM snct_notice_documents
         WHERE notice_id IS NOT NULL AND scan_status = 'clean'
         ORDER BY created_at
       `),
-      client.query<{ id: string; name: string; logo: string }>(`
+      run<{ id: string; name: string; logo: string } & RowDataPacket>(`
         SELECT id, name, logo FROM snct_partners ORDER BY sort_order, created_at
       `),
-      client.query<{
+      run<{
         event_edition: string;
         hero_image_url: string;
-      }>(`
+      } & RowDataPacket>(`
         SELECT event_edition, hero_image_url
         FROM snct_site_settings WHERE id = 1
       `),
@@ -227,64 +233,89 @@ export async function readSnctStore(): Promise<SnctStore> {
   return readStore();
 }
 
-async function syncContent(client: PoolClient, store: SnctStore) {
+async function deleteMissingIds(
+  client: PoolConnection,
+  table: string,
+  ids: string[],
+) {
+  if (ids.length === 0) {
+    await clientExecute(client, `DELETE FROM ${table}`);
+    return;
+  }
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(", ");
+  await clientExecute(
+    client,
+    `DELETE FROM ${table} WHERE id NOT IN (${placeholders})`,
+    ids,
+  );
+}
+
+async function syncContent(client: PoolConnection, store: SnctStore) {
   for (const [index, event] of store.events.entries()) {
-    await client.query(
+    await clientQuery(
+      client,
       `INSERT INTO snct_events
         (id, event_date, event_time, title, location, sort_order, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, now())
-       ON CONFLICT (id) DO UPDATE SET
-         event_date = excluded.event_date, event_time = excluded.event_time,
-         title = excluded.title, location = excluded.location,
-         sort_order = excluded.sort_order, updated_at = now()`,
+       ON DUPLICATE KEY UPDATE
+         event_date = VALUES(event_date), event_time = VALUES(event_time),
+         title = VALUES(title), location = VALUES(location),
+         sort_order = VALUES(sort_order), updated_at = now()`,
       [event.id, event.date, event.time, event.title, event.location, index],
     );
   }
-  await client.query(
-    "DELETE FROM snct_events WHERE NOT (id = ANY($1::text[]))",
-    [store.events.map((event) => event.id)],
+  await deleteMissingIds(
+    client,
+    "snct_events",
+    store.events.map((event) => event.id),
   );
 
   for (const [index, notice] of store.notices.entries()) {
-    await client.query(
+    await clientQuery(
+      client,
       `INSERT INTO snct_notices
         (id, title, registration, status, sort_order, updated_at)
        VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (id) DO UPDATE SET
-         title = excluded.title, registration = excluded.registration,
-         status = excluded.status, sort_order = excluded.sort_order,
+       ON DUPLICATE KEY UPDATE
+         title = VALUES(title), registration = VALUES(registration),
+         status = VALUES(status), sort_order = VALUES(sort_order),
          updated_at = now()`,
       [notice.id, notice.title, notice.registration, notice.status, index],
     );
     for (const document of notice.documents) {
-      await client.query(
+      await clientQuery(
+        client,
         "UPDATE snct_notice_documents SET notice_id = $1 WHERE id = $2",
         [notice.id, document.id],
       );
     }
   }
-  await client.query(
-    "DELETE FROM snct_notices WHERE NOT (id = ANY($1::text[]))",
-    [store.notices.map((notice) => notice.id)],
+  await deleteMissingIds(
+    client,
+    "snct_notices",
+    store.notices.map((notice) => notice.id),
   );
 
   for (const [index, partner] of store.partners.entries()) {
-    await client.query(
+    await clientQuery(
+      client,
       `INSERT INTO snct_partners
         (id, name, logo, sort_order, updated_at)
        VALUES ($1, $2, $3, $4, now())
-       ON CONFLICT (id) DO UPDATE SET
-         name = excluded.name, logo = excluded.logo,
-         sort_order = excluded.sort_order, updated_at = now()`,
+       ON DUPLICATE KEY UPDATE
+         name = VALUES(name), logo = VALUES(logo),
+         sort_order = VALUES(sort_order), updated_at = now()`,
       [partner.id, partner.name, partner.logo, index],
     );
   }
-  await client.query(
-    "DELETE FROM snct_partners WHERE NOT (id = ANY($1::text[]))",
-    [store.partners.map((partner) => partner.id)],
+  await deleteMissingIds(
+    client,
+    "snct_partners",
+    store.partners.map((partner) => partner.id),
   );
 
-  await client.query(
+  await clientQuery(
+    client,
     `UPDATE snct_site_settings
      SET event_edition = $1, hero_image_url = $2, updated_at = now()
      WHERE id = 1`,
@@ -293,7 +324,8 @@ async function syncContent(client: PoolClient, store: SnctStore) {
 
   for (const user of store.users) {
     if (user.role !== "visitor") continue;
-    await client.query(
+    await clientQuery(
+      client,
       `UPDATE snct_profiles SET
          checked_in_at = $2, gift_delivered_at = $3,
          qr_expires_at = $4, qr_revoked_at = $5, updated_at = now()
@@ -314,7 +346,7 @@ export async function updateSnctStore<T>(
 ): Promise<T> {
   await ensureDomainSeeded();
   return transaction(async (client) => {
-    await client.query("SELECT pg_advisory_xact_lock(736282028)");
+    await clientQuery(client, "SELECT GET_LOCK('snct-store', 10)");
     const store = await readStore(client);
     const result = await mutate(store);
     await syncContent(client, store);
@@ -391,7 +423,7 @@ export async function readNoticeDocument(storageName: string) {
     encryption_iv: Buffer;
     encryption_tag: Buffer;
     encryption_key_version: number;
-  }>(
+  } & RowDataPacket>(
     `SELECT file_data, encryption_iv, encryption_tag, encryption_key_version
      FROM snct_notice_documents
      WHERE storage_name = $1 AND scan_status = 'clean'`,
@@ -416,13 +448,18 @@ export async function deleteNoticeDocumentFile(storageName: string) {
 
 export async function rotateVisitorQr(userId: string) {
   const visitorHash = randomUUID() + randomUUID();
-  const result = await query<{ visitor_hash: string; qr_expires_at: Date }>(
+  await query(
     `UPDATE snct_profiles SET
        visitor_hash = $2, qr_revoked_at = NULL,
-       qr_expires_at = now() + interval '1 year', updated_at = now()
-     WHERE user_id = $1
-     RETURNING visitor_hash, qr_expires_at`,
+       qr_expires_at = DATE_ADD(NOW(3), INTERVAL 1 YEAR), updated_at = now()
+     WHERE user_id = $1`,
     [userId, visitorHash],
+  );
+  const result = await query<
+    { visitor_hash: string; qr_expires_at: Date } & RowDataPacket
+  >(
+    `SELECT visitor_hash, qr_expires_at FROM snct_profiles WHERE user_id = $1`,
+    [userId],
   );
   return result.rows[0]
     ? {

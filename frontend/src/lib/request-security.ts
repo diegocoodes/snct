@@ -1,5 +1,3 @@
-import "server-only";
-
 import { createHmac } from "node:crypto";
 import { APIError } from "better-auth/api";
 
@@ -79,35 +77,40 @@ export async function enforceRateLimit(options: {
 
   const result = await query<{ request_count: number; retry_after: number }>(
     `
-      INSERT INTO snct_rate_limits AS limits
+      INSERT INTO snct_rate_limits
         (rate_key, request_count, window_started_at, expires_at)
-      VALUES ($1, 1, now(), now() + ($2 * interval '1 second'))
-      ON CONFLICT (rate_key) DO UPDATE SET
-        request_count = CASE
-          WHEN limits.expires_at <= now() THEN 1
-          ELSE limits.request_count + 1
-        END,
-        window_started_at = CASE
-          WHEN limits.expires_at <= now() THEN now()
-          ELSE limits.window_started_at
-        END,
-        expires_at = CASE
-          WHEN limits.expires_at <= now() THEN now() + ($2 * interval '1 second')
-          ELSE limits.expires_at
-        END
-      RETURNING request_count,
-        GREATEST(1, CEIL(EXTRACT(EPOCH FROM (expires_at - now()))))::int AS retry_after
+      VALUES (?, 1, NOW(3), DATE_ADD(NOW(3), INTERVAL ? SECOND))
+      ON DUPLICATE KEY UPDATE
+        request_count = IF(expires_at <= NOW(3), 1, request_count + 1),
+        window_started_at = IF(expires_at <= NOW(3), NOW(3), window_started_at),
+        expires_at = IF(
+          expires_at <= NOW(3),
+          DATE_ADD(NOW(3), INTERVAL ? SECOND),
+          expires_at
+        )
     `,
-    [key, options.windowSeconds],
+    [key, options.windowSeconds, options.windowSeconds],
   );
 
-  const state = result.rows[0];
-  if (state.request_count > options.limit) {
+  const state = await query<{ request_count: number; retry_after: number }>(
+    `
+      SELECT request_count,
+             GREATEST(1, CEIL(TIMESTAMPDIFF(SECOND, NOW(3), expires_at))) AS retry_after
+      FROM snct_rate_limits
+      WHERE rate_key = ?
+    `,
+    [key],
+  );
+
+  const current = state.rows[0];
+  if (!current || current.request_count > options.limit) {
     throw new Response("Muitas tentativas. Aguarde e tente novamente.", {
       status: 429,
-      headers: { "Retry-After": String(state.retry_after) },
+      headers: { "Retry-After": String(current?.retry_after ?? 1) },
     });
   }
+
+  void result;
 }
 
 export function hashAuditAddress(request: Request) {

@@ -12,22 +12,20 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:17-alpine
+      mysql:
+        image: mysql:8.4
         env:
-          POSTGRES_DB: snct
-          POSTGRES_USER: snct
-          POSTGRES_PASSWORD: snct
+          MYSQL_ROOT_PASSWORD: snct
+          MYSQL_DATABASE: snct
         ports:
-          - 5432:5432
+          - 3306:3306
         options: >-
-          --health-cmd "pg_isready -U snct -d snct"
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -psnct"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 12
+          --health-retries 20
     env:
-      DATABASE_URL: postgresql://snct:snct@127.0.0.1:5432/snct
-      DATABASE_SSL: disable
+      DATABASE_URL: mysql://root:snct@127.0.0.1:3306/snct
       BETTER_AUTH_URL: https://snct.example.gov.br
       BETTER_AUTH_SECRET: ci-only-secret-with-more-than-32-characters
       SNCT_RATE_LIMIT_SECRET: ci-only-rate-limit-secret-with-32-characters
@@ -65,12 +63,24 @@ jobs:
         working-directory: backend
         run: |
           printf '%s\n' \
-            'POSTGRES_PASSWORD=snct' \
-            'DATABASE_URL=postgresql://snct:snct@127.0.0.1:5432/snct' \
-            'DATABASE_SSL=disable' \
-            'DATABASE_SSL_REJECT_UNAUTHORIZED=true' \
+            'DATABASE_URL=mysql://root:snct@127.0.0.1:3306/snct' \
             > .env
           npm run db:migrate
+      - name: Start backend smoke check
+        working-directory: backend
+        run: |
+          printf '%s\n' \
+            'PORT=4001' \
+            'DATABASE_URL=mysql://root:snct@127.0.0.1:3306/snct' \
+            'BETTER_AUTH_URL=https://snct.example.gov.br' \
+            'BETTER_AUTH_SECRET=ci-only-secret-with-more-than-32-characters' \
+            'SNCT_RATE_LIMIT_SECRET=ci-only-rate-limit-secret-with-32-characters' \
+            'SNCT_DATA_ENCRYPTION_KEYS=1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' \
+            'SNCT_TRUSTED_ORIGINS=https://snct.example.gov.br' \
+            > .env
+          npm run start &
+          sleep 5
+          curl -fsS http://localhost:4001/health
       - name: Lint
         working-directory: frontend
         run: npm run lint
@@ -82,4 +92,6 @@ jobs:
         run: npm run test:run
       - name: Build
         working-directory: frontend
+        env:
+          SNCT_API_ORIGIN: http://localhost:4001
         run: npm run build

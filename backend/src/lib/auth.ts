@@ -11,7 +11,7 @@ import type { PublicUser, SessionData, UserRole } from "@/lib/snct-types";
 
 export const requestHeaders = new AsyncLocalStorage<Headers>();
 
-const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:4000";
 const isProduction = process.env.NODE_ENV === "production";
 
 export const auth = betterAuth({

@@ -1,5 +1,3 @@
-import "server-only";
-
 import { query } from "@/lib/db";
 import { hashAuditAddress } from "@/lib/request-security";
 import type { UserRole } from "@/lib/snct-types";
@@ -19,7 +17,7 @@ export async function recordAuditEvent(request: Request, event: AuditEvent) {
     `
       INSERT INTO snct_audit_logs
         (actor_id, actor_role, action, entity, entity_id, outcome, ip_hash, metadata)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, CAST($8 AS JSON))
     `,
     [
       event.actorId ?? null,
