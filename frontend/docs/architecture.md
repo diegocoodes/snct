@@ -48,16 +48,16 @@ flowchart TB
 
 ## Camadas
 
-- `src/app`: páginas, metadata e Route Handlers.
-- `src/components`: experiência pública, autenticação, dashboards e primitivas.
-- `src/lib/auth.ts`: Better Auth, Argon2id, MFA, sessões e políticas de e-mail.
-- `src/lib/db.ts`: pool PostgreSQL e transações.
-- `src/lib/request-security.ts`: origem, cabeçalho anti-CSRF e rate limiting.
-- `src/lib/snct-store.ts`: repositório de conteúdo, credenciais e documentos.
-- `src/lib/audit.ts`: trilha de eventos sensíveis.
-- `src/lib/encryption.ts`: criptografia versionada AES-256-GCM.
-- `src/proxy.ts`: nonce CSP e headers de proteção.
-- `db/migrations`: esquema SQL imutável e versionado.
+- `frontend/src/app`: páginas, metadata e Route Handlers.
+- `frontend/src/components`: experiência pública, autenticação, dashboards e primitivas.
+- `frontend/src/lib/auth.ts`: Better Auth, Argon2id, MFA, sessões e políticas de e-mail.
+- `frontend/src/lib/db.ts`: pool PostgreSQL e transações.
+- `frontend/src/lib/request-security.ts`: origem, cabeçalho anti-CSRF e rate limiting.
+- `frontend/src/lib/snct-store.ts`: repositório de conteúdo, credenciais e documentos.
+- `frontend/src/lib/audit.ts`: trilha de eventos sensíveis.
+- `frontend/src/lib/encryption.ts`: criptografia versionada AES-256-GCM.
+- `frontend/src/proxy.ts`: nonce CSP e headers de proteção.
+- `backend/db/migrations`: esquema SQL imutável e versionado.
 
 ## Autenticação e autorização
 

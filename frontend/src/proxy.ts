@@ -10,7 +10,9 @@ function contentSecurityPolicy(nonce: string) {
       .join(" ") ?? "";
   const directives = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    process.env.NODE_ENV === "production"
+      ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+      : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval'`,
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: https://paulista.pe.gov.br https://snct.paulista.pe.gov.br ${additionalImageSources}`,
     "font-src 'self' data:",

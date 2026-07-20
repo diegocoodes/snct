@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="public/images/cienciasemfundo.png" width="230" alt="Logotipo Ciência e Tecnologia" />
+  <img src="frontend/public/images/cienciasemfundo.png" width="230" alt="Logotipo Ciência e Tecnologia" />
 
 # SNCT Paulista 2026
 
@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 </div>
 
-![Página inicial do portal SNCT Paulista 2026](docs/assets/home-desktop.png)
+![Página inicial do portal SNCT Paulista 2026](frontend/docs/assets/home-desktop.png)
 
 ## Sobre o projeto
 
@@ -34,7 +34,7 @@ O SNCT Paulista 2026 reúne a presença pública e a operação do evento em uma
 ### Responsivo por padrão
 
 <p align="center">
-  <img src="docs/assets/home-mobile.png" width="320" alt="Hero do portal SNCT em um dispositivo móvel" />
+  <img src="frontend/docs/assets/home-mobile.png" width="320" alt="Hero do portal SNCT em um dispositivo móvel" />
 </p>
 
 ## Arquitetura
@@ -53,7 +53,7 @@ flowchart LR
     AUTH --> SMTP[SMTP]
 ```
 
-Server Components compõem as páginas e consultam o PostgreSQL diretamente. Componentes de cliente usam Route Handlers como fronteira para mutações. Toda autorização sensível é repetida no servidor. Consulte a [arquitetura detalhada](docs/architecture.md).
+Server Components compõem as páginas e consultam o PostgreSQL diretamente. Componentes de cliente usam Route Handlers como fronteira para mutações. Toda autorização sensível é repetida no servidor. Consulte a [arquitetura detalhada](frontend/docs/architecture.md).
 
 ## Perfis
 
@@ -77,17 +77,18 @@ Server Components compõem as páginas e consultam o PostgreSQL diretamente. Com
 ## Estrutura
 
 ```text
-db/migrations/           # Esquema PostgreSQL versionado
-scripts/                 # Migração, retenção e validação do ambiente
-src/
-├── app/                 # Páginas e Route Handlers
-├── components/          # Auth, dashboards, portal e design system
-├── config/              # Conteúdo inicial
-├── lib/                 # Auth, DB, segurança, auditoria e integrações
-└── proxy.ts             # CSP com nonce e headers globais
-docs/                    # Arquitetura, segurança, implantação e operação
-public/                  # Imagens públicas
-compose.yaml             # PostgreSQL e ClamAV para desenvolvimento
+frontend/                 # Aplicação Next.js (UI + Route Handlers)
+├── src/                  # Páginas, componentes, lib e APIs
+├── public/               # Assets estáticos
+├── scripts/              # Loader de env do backend + validação de produção
+├── docs/                 # Arquitetura, segurança, implantação e operação
+└── .env                  # Variáveis públicas (NEXT_PUBLIC_*)
+
+backend/                  # Infraestrutura de dados e operações
+├── db/migrations/        # Esquema PostgreSQL versionado
+├── scripts/              # Migração e retenção
+├── compose.yaml          # PostgreSQL e ClamAV para desenvolvimento
+└── .env                  # Segredos e variáveis de servidor / banco
 ```
 
 ## Executando localmente
@@ -97,16 +98,23 @@ Requisitos: Node.js 20.9+, npm e uma instância PostgreSQL. Docker é opcional, 
 ```powershell
 git clone https://github.com/diegocoodes/snct.git
 Set-Location snct
+
+# Backend (banco e serviços locais)
+Set-Location backend
+Copy-Item .env.example .env
 npm install
-Copy-Item .env.example .env.local
-```
-
-Gere segredos diferentes para autenticação, rate limiting e criptografia. Para desenvolvimento com Docker:
-
-```powershell
 $env:POSTGRES_PASSWORD="defina-uma-senha-local-forte"
-docker compose up -d
+# Atualize POSTGRES_PASSWORD e DATABASE_URL em backend/.env
+npm run docker:up
 npm run db:migrate
+Set-Location ..
+
+# Frontend (aplicação)
+Set-Location frontend
+Copy-Item .env.example .env
+# Ajuste NEXT_PUBLIC_PRIVACY_CONTACT em frontend/.env
+# Preencha os segredos em backend/.env (carregado automaticamente pelo frontend)
+npm install
 npm run dev
 ```
 
@@ -114,9 +122,18 @@ Acesse `http://localhost:3000`. O Docker não é obrigatório: `DATABASE_URL` po
 
 ## Variáveis essenciais
 
+### `frontend/.env`
+
+| Variável                      | Finalidade                        |
+| ----------------------------- | --------------------------------- |
+| `NEXT_PUBLIC_PRIVACY_CONTACT` | Canal do encarregado/controlador  |
+
+### `backend/.env`
+
 | Variável                                   | Finalidade                                     |
 | ------------------------------------------ | ---------------------------------------------- |
-| `DATABASE_URL`                             | Conexão PostgreSQL                             |
+| `POSTGRES_PASSWORD`                        | Senha do PostgreSQL no Docker Compose          |
+| `DATABASE_URL`                             | Conexão PostgreSQL (app, migrações e retenção) |
 | `BETTER_AUTH_URL`                          | URL canônica HTTPS do portal                   |
 | `BETTER_AUTH_SECRET`                       | Criptografia e assinatura do Better Auth       |
 | `SNCT_RATE_LIMIT_SECRET`                   | HMAC de IPs e identificadores dos limitadores  |
@@ -124,39 +141,46 @@ Acesse `http://localhost:3000`. O Docker não é obrigatório: `DATABASE_URL` po
 | `SNCT_ADMIN_EMAIL` / `SNCT_ADMIN_PASSWORD` | Bootstrap único do administrador               |
 | `SNCT_SMTP_*` / `SNCT_EMAIL_FROM`          | Verificação, recuperação e exclusão por e-mail |
 | `CLAMAV_HOST` / `CLAMAV_PORT`              | Análise antivírus obrigatória em produção      |
-| `NEXT_PUBLIC_PRIVACY_CONTACT`              | Canal do encarregado/controlador               |
 
-Use `.env.example` como referência. Nunca envie `.env.local`, dumps, chaves ou credenciais ao Git. O administrador configurado no ambiente é criado no PostgreSQL no primeiro login, com senha convertida para Argon2id.
+Os scripts do frontend (`dev`, `build`, `start`, `security:check-env`) carregam automaticamente `backend/.env` além de `frontend/.env`.
+
+Use `frontend/.env.example` e `backend/.env.example` como referência. Nunca envie `.env`, dumps, chaves ou credenciais ao Git. O administrador configurado no ambiente é criado no PostgreSQL no primeiro login, com senha convertida para Argon2id.
 
 ## Comandos
 
 ```powershell
+# Frontend
+Set-Location frontend
 npm run dev                # desenvolvimento
 npm run build              # build de produção
 npm run start              # executa o build
-npm run db:migrate         # aplica migrações SQL com checksum
-npm run db:cleanup         # aplica a política de retenção
 npm run security:check-env # valida configuração de produção
 npm run security:audit     # vulnerabilidades das dependências de produção
 npm run lint
 npm run typecheck
 npm run test:run
 npm run format:check
+
+# Backend
+Set-Location backend
+npm run docker:up          # sobe PostgreSQL e ClamAV
+npm run db:migrate         # aplica migrações SQL com checksum
+npm run db:cleanup         # aplica a política de retenção
 ```
 
 ## Segurança
 
 O sistema aplica defesa em profundidade: Argon2id, MFA, sessão revogável, autorização server-side, proteção de origem, rate limiting, CSP, criptografia de anexos, antivírus, auditoria e automação de dependências. Isso reduz riscos, mas não substitui TLS, firewall/WAF, backups, monitoramento, revisão de infraestrutura e teste de intrusão antes do evento.
 
-Consulte o [modelo de ameaças e checklist de segurança](docs/security.md) e o [guia de implantação](docs/deployment.md).
+Consulte o [modelo de ameaças e checklist de segurança](frontend/docs/security.md) e o [guia de implantação](frontend/docs/deployment.md).
 
 ## Documentação
 
-- [Arquitetura e fluxos](docs/architecture.md)
-- [Segurança e resposta a incidentes](docs/security.md)
-- [Implantação PostgreSQL](docs/deployment.md)
-- [Guia do painel administrativo](docs/administration.md)
-- [Design system e acessibilidade](docs/design-system.md)
+- [Arquitetura e fluxos](frontend/docs/architecture.md)
+- [Segurança e resposta a incidentes](frontend/docs/security.md)
+- [Implantação PostgreSQL](frontend/docs/deployment.md)
+- [Guia do painel administrativo](frontend/docs/administration.md)
+- [Design system e acessibilidade](frontend/docs/design-system.md)
 
 ---
 

@@ -31,7 +31,7 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${montserrat.variable} ${poppins.variable} h-full font-sans antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         {children}
         <Toaster richColors position="top-right" />
       </body>

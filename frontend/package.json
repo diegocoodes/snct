@@ -1,20 +1,18 @@
 {
-  "name": "snct-app",
+  "name": "snct-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next dev",
+    "build": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next build",
+    "start": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest",
     "test:run": "vitest run --passWithNoTests",
-    "db:migrate": "node scripts/migrate.mjs",
-    "db:cleanup": "node scripts/cleanup-retention.mjs",
-    "security:check-env": "node scripts/verify-production-env.mjs",
+    "security:check-env": "node --import ./scripts/load-backend-env.mjs ./scripts/verify-production-env.mjs",
     "security:audit": "npm audit --omit=dev"
   },
   "dependencies": {

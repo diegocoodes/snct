@@ -27,6 +27,7 @@ jobs:
           --health-retries 12
     env:
       DATABASE_URL: postgresql://snct:snct@127.0.0.1:5432/snct
+      DATABASE_SSL: disable
       BETTER_AUTH_URL: https://snct.example.gov.br
       BETTER_AUTH_SECRET: ci-only-secret-with-more-than-32-characters
       SNCT_RATE_LIMIT_SECRET: ci-only-rate-limit-secret-with-32-characters
@@ -38,17 +39,47 @@ jobs:
       SNCT_SMTP_PASSWORD: ci-only-password
       SNCT_EMAIL_FROM: SNCT <no-reply@example.gov.br>
       CLAMAV_HOST: 127.0.0.1
+      NEXT_PUBLIC_PRIVACY_CONTACT: privacidade@example.gov.br
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npm run security:check-env
-      - run: npm run db:migrate
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test:run
-      - run: npm run build
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - name: Install backend
+        working-directory: backend
+        run: npm install
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Audit frontend production deps
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Check production env
+        working-directory: frontend
+        run: npm run security:check-env
+      - name: Migrate database
+        working-directory: backend
+        run: |
+          printf '%s\n' \
+            'POSTGRES_PASSWORD=snct' \
+            'DATABASE_URL=postgresql://snct:snct@127.0.0.1:5432/snct' \
+            'DATABASE_SSL=disable' \
+            'DATABASE_SSL_REJECT_UNAUTHORIZED=true' \
+            > .env
+          npm run db:migrate
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Test
+        working-directory: frontend
+        run: npm run test:run
+      - name: Build
+        working-directory: frontend
+        run: npm run build

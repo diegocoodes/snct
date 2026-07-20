@@ -2,8 +2,8 @@
 
 ## Primeiro acesso
 
-1. Configure `SNCT_ADMIN_EMAIL` e uma senha forte em `SNCT_ADMIN_PASSWORD`.
-2. Execute `npm run db:migrate`.
+1. Configure `SNCT_ADMIN_EMAIL` e uma senha forte em `SNCT_ADMIN_PASSWORD` em `backend/.env`.
+2. Em `backend/`, execute `npm run db:migrate`.
 3. Abra `/login` e informe as credenciais.
 4. No primeiro acesso, a conta é criada no PostgreSQL e a senha é convertida em Argon2id.
 5. Cadastre imediatamente o MFA TOTP e salve os códigos de recuperação fora do computador.
@@ -59,7 +59,7 @@ O controlador deve definir contato do encarregado, base legal, retenção final 
 
 ## Rotinas
 
-- Diário: `npm run db:cleanup` e revisão de alertas.
+- Diário: em `backend/`, `npm run db:cleanup` e revisão de alertas.
 - Semanal: vulnerabilidades, contas de equipe e falhas de autenticação.
 - Antes do evento: backup/restauração, scanner, e-mail, MFA e teste de carga.
 - Depois do evento: revisar retenção, revogar contas temporárias e preservar somente o necessário.

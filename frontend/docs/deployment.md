@@ -12,7 +12,7 @@
 
 1. Crie banco e usuário exclusivos para o portal.
 2. Restrinja a origem de rede que pode acessar o PostgreSQL e o ClamAV.
-3. Configure todas as variáveis de `.env.example` no cofre do provedor.
+3. Configure todas as variáveis de `frontend/.env.example` e `backend/.env.example` no cofre do provedor.
 4. Use três segredos independentes: Better Auth, rate limiting e criptografia de arquivos.
 5. Defina `BETTER_AUTH_URL` e `SNCT_TRUSTED_ORIGINS` somente com URLs HTTPS oficiais.
 6. Defina o contato real de privacidade antes de abrir inscrições.
@@ -20,6 +20,7 @@
 Valide a configuração:
 
 ```powershell
+Set-Location frontend
 npm run security:check-env
 ```
 
@@ -28,6 +29,7 @@ npm run security:check-env
 Execute as migrações como uma etapa única antes de iniciar as novas instâncias:
 
 ```powershell
+Set-Location backend
 npm run db:migrate
 ```
 
@@ -38,13 +40,17 @@ O usuário de migração pode ter privilégios de DDL. O usuário usado pela apl
 ## Processo de release
 
 ```powershell
+Set-Location backend
+npm install
+npm run db:migrate
+
+Set-Location ../frontend
 npm ci
 npm run security:audit
 npm run lint
 npm run typecheck
 npm run test:run
 npm run build
-npm run db:migrate
 npm run start
 ```
 
@@ -63,6 +69,7 @@ Use implantação gradual e mantenha uma versão anterior disponível para rollb
 Execute diariamente:
 
 ```powershell
+Set-Location backend
 npm run db:cleanup
 ```
 

@@ -64,9 +64,9 @@ Segredos ficam no cofre do provedor e nunca em arquivos, logs, screenshots ou Gi
 
 ## Operação
 
-- Execute `npm run security:audit` em cada entrega.
-- Execute `npm run security:check-env` antes de promover para produção.
-- Agende `npm run db:cleanup` diariamente.
+- Em `frontend/`, execute `npm run security:audit` em cada entrega.
+- Em `frontend/`, execute `npm run security:check-env` antes de promover para produção.
+- Em `backend/`, agende `npm run db:cleanup` diariamente.
 - Centralize logs, crie alertas para falhas repetidas e proteja o acesso à auditoria.
 - Use TLS, WAF/CDN, rede privada para PostgreSQL/ClamAV e princípio do menor privilégio.
 - Teste restauração de backup e resposta a incidentes antes do evento.
