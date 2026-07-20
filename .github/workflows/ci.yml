@@ -42,7 +42,7 @@ jobs:
       NEXT_PUBLIC_PRIVACY_CONTACT: privacidade@example.gov.br
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
