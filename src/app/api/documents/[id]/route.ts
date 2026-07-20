@@ -22,7 +22,8 @@ export async function GET(
     return new Response(new Uint8Array(file), {
       headers: {
         "Cache-Control": "no-store",
-        "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(document.name)}`,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(document.name)}`,
+        "Content-Security-Policy": "default-src 'none'; sandbox",
         "Content-Length": String(file.byteLength),
         "Content-Type": document.mimeType,
         "X-Content-Type-Options": "nosniff",

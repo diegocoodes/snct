@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { AdminDashboard } from "@/components/dashboard/admin-dashboard";
+import { MfaEnrollment } from "@/components/auth/mfa-enrollment";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { StaffScanner } from "@/components/dashboard/staff-scanner";
 import { VisitorPass } from "@/components/dashboard/visitor-pass";
 import { getSession, toPublicUser } from "@/lib/auth";
+import { readAuditEvents } from "@/lib/audit";
 import { readSnctStore } from "@/lib/snct-store";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +17,19 @@ export default async function ProfilePage() {
 
   const store = await readSnctStore();
 
+  if (
+    (session.role === "admin" || session.role === "staff") &&
+    !session.mfaEnabled
+  ) {
+    return (
+      <DashboardShell session={session}>
+        <MfaEnrollment />
+      </DashboardShell>
+    );
+  }
+
   if (session.role === "admin") {
+    const auditLogs = await readAuditEvents(100);
     return (
       <DashboardShell session={session}>
         <AdminDashboard
@@ -24,6 +38,7 @@ export default async function ProfilePage() {
           notices={store.notices}
           partners={store.partners}
           settings={store.settings}
+          auditLogs={auditLogs}
         />
       </DashboardShell>
     );

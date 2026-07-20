@@ -1,0 +1,54 @@
+name: Qualidade e segurança
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: snct
+          POSTGRES_USER: snct
+          POSTGRES_PASSWORD: snct
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U snct -d snct"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgresql://snct:snct@127.0.0.1:5432/snct
+      BETTER_AUTH_URL: https://snct.example.gov.br
+      BETTER_AUTH_SECRET: ci-only-secret-with-more-than-32-characters
+      SNCT_RATE_LIMIT_SECRET: ci-only-rate-limit-secret-with-32-characters
+      SNCT_DATA_ENCRYPTION_KEYS: 1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      SNCT_ADMIN_EMAIL: admin@example.gov.br
+      SNCT_ADMIN_PASSWORD: CiOnly!Password123
+      SNCT_SMTP_HOST: smtp.example.gov.br
+      SNCT_SMTP_USER: ci
+      SNCT_SMTP_PASSWORD: ci-only-password
+      SNCT_EMAIL_FROM: SNCT <no-reply@example.gov.br>
+      CLAMAV_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run security:check-env
+      - run: npm run db:migrate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:run
+      - run: npm run build

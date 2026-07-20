@@ -3,29 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LoaderCircle, QrCode, ScanLine, ShieldCheck } from "lucide-react";
+import { KeyRound, LoaderCircle, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { UserRole } from "@/lib/snct-types";
-import { cn } from "@/lib/utils";
-
-const roles = [
-  { value: "visitor", label: "Visitante", icon: QrCode, tone: "cyan" },
-  { value: "staff", label: "Staff", icon: ScanLine, tone: "purple" },
-  {
-    value: "admin",
-    label: "Administrador",
-    icon: ShieldCheck,
-    tone: "magenta",
-  },
-] as const;
+import { authClient } from "@/lib/auth-client";
+import { secureFetch } from "@/lib/secure-fetch";
 
 function LoginForm() {
   const router = useRouter();
-  const [role, setRole] = useState<UserRole>("visitor");
   const [loading, setLoading] = useState(false);
+  const [mfaPending, setMfaPending] = useState(false);
+  const [useBackupCode, setUseBackupCode] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -33,18 +23,42 @@ function LoginForm() {
     setLoading(true);
     setError("");
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/login", {
+
+    if (mfaPending) {
+      const code = String(form.get("code") ?? "").trim();
+      const result = useBackupCode
+        ? await authClient.twoFactor.verifyBackupCode({ code })
+        : await authClient.twoFactor.verifyTotp({ code, trustDevice: false });
+      if (result.error) {
+        setError("Código inválido ou expirado.");
+        setLoading(false);
+        return;
+      }
+      router.push("/perfil");
+      router.refresh();
+      return;
+    }
+
+    const response = await secureFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        role,
         email: form.get("email"),
         password: form.get("password"),
       }),
     });
-    const result = (await response.json()) as { error?: string };
+    const result = (await response.json()) as {
+      error?: string;
+      message?: string;
+      twoFactorRedirect?: boolean;
+    };
     if (!response.ok) {
-      setError(result.error ?? "Não foi possível entrar.");
+      setError(result.error ?? result.message ?? "Não foi possível entrar.");
+      setLoading(false);
+      return;
+    }
+    if (result.twoFactorRedirect) {
+      setMfaPending(true);
       setLoading(false);
       return;
     }
@@ -54,60 +68,84 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <fieldset>
-        <legend className="mb-3 text-sm font-semibold text-ice-white">
-          Tipo de acesso
-        </legend>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {roles.map(({ value, label, icon: Icon, tone }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={role === value}
-              onClick={() => setRole(value)}
-              className={cn(
-                "flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border bg-white/[0.025] px-3 py-3 text-xs font-semibold text-blue-gray transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-electric",
-                role === value &&
-                  tone === "cyan" &&
-                  "border-cyan-electric/70 bg-cyan-electric/10 text-cyan-electric shadow-[0_0_24px_rgb(0_229_255/10%)]",
-                role === value &&
-                  tone === "purple" &&
-                  "border-purple-vibrant/70 bg-purple-vibrant/15 text-[#BDA5FF]",
-                role === value &&
-                  tone === "magenta" &&
-                  "border-magenta-neon/60 bg-magenta-neon/10 text-[#FF9AE8]",
-                role !== value &&
-                  "border-white/10 hover:border-white/25 hover:text-ice-white",
-              )}
-            >
-              <Icon className="size-5" aria-hidden />
-              {label}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="space-y-2">
-        <Label htmlFor="email">E-mail</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          placeholder="voce@exemplo.com"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="password">Senha</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-      </div>
+      {mfaPending ? (
+        <>
+          <div className="rounded-2xl border border-cyan-electric/25 bg-cyan-electric/5 p-4">
+            <ShieldCheck className="size-6 text-cyan-electric" aria-hidden />
+            <h2 className="mt-3 font-display text-lg font-semibold text-ice-white">
+              Verificação em duas etapas
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-blue-gray">
+              Informe o código do aplicativo autenticador ou use um código de
+              recuperação.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="code">
+              {useBackupCode ? "Código de recuperação" : "Código de 6 dígitos"}
+            </Label>
+            <Input
+              id="code"
+              name="code"
+              inputMode={useBackupCode ? "text" : "numeric"}
+              autoComplete="one-time-code"
+              pattern={useBackupCode ? undefined : "[0-9]{6}"}
+              maxLength={useBackupCode ? 32 : 6}
+              required
+              autoFocus
+            />
+          </div>
+          <button
+            type="button"
+            className="text-sm font-semibold text-cyan-electric hover:underline"
+            onClick={() => setUseBackupCode((current) => !current)}
+          >
+            {useBackupCode
+              ? "Usar aplicativo autenticador"
+              : "Usar código de recuperação"}
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+            <div className="flex items-center gap-3">
+              <KeyRound className="size-5 text-cyan-electric" aria-hidden />
+              <p className="text-sm text-blue-gray">
+                Seu perfil de acesso é identificado automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">E-mail</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              placeholder="voce@exemplo.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="password">Senha</Label>
+              <Link
+                href="/recuperar-senha"
+                className="text-xs font-semibold text-cyan-electric hover:underline"
+              >
+                Esqueci a senha
+              </Link>
+            </div>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+        </>
+      )}
 
       {error ? (
         <p
@@ -125,10 +163,10 @@ function LoginForm() {
             aria-hidden
           />
         ) : null}
-        Entrar como {roles.find((item) => item.value === role)?.label}
+        {mfaPending ? "Validar código" : "Entrar com segurança"}
       </Button>
 
-      {role === "visitor" ? (
+      {!mfaPending ? (
         <p className="text-center text-sm text-blue-gray">
           Ainda não tem credencial?{" "}
           <Link

@@ -12,8 +12,8 @@ function EventFooter() {
           <a href="/perguntas-frequentes" className="hover:text-foreground">
             Acessibilidade
           </a>
-          <a href="/perguntas-frequentes" className="hover:text-foreground">
-            Privacidade
+          <a href="/privacidade" className="hover:text-foreground">
+            Privacidade e LGPD
           </a>
           <a href="/perguntas-frequentes" className="hover:text-foreground">
             Termos de uso

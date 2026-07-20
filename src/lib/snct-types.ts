@@ -5,15 +5,21 @@ export type StoredUser = {
   name: string;
   email: string;
   age?: number;
-  role: Exclude<UserRole, "admin">;
-  passwordHash: string;
+  role: UserRole;
+  emailVerified?: boolean;
+  twoFactorEnabled?: boolean;
   visitorHash?: string;
   createdAt: string;
   checkedInAt?: string;
   giftDeliveredAt?: string;
+  privacyAcceptedAt?: string;
+  privacyVersion?: string;
+  guardianConsentAt?: string;
+  qrExpiresAt?: string;
+  qrRevokedAt?: string;
 };
 
-export type PublicUser = Omit<StoredUser, "passwordHash">;
+export type PublicUser = StoredUser;
 
 export type ManagedEvent = {
   id: string;
@@ -63,5 +69,19 @@ export type SessionData = {
   name: string;
   email: string;
   role: UserRole;
+  emailVerified: boolean;
+  mfaEnabled: boolean;
   expiresAt: number;
+};
+
+export type AuditLog = {
+  id: number;
+  actorId: string | null;
+  actorRole: UserRole | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  outcome: "success" | "failure" | "blocked";
+  metadata: Record<string, unknown>;
+  createdAt: string;
 };

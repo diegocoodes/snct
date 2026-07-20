@@ -3,30 +3,33 @@
 
 # SNCT Paulista 2026
 
-**Portal da Semana Nacional de Ciência e Tecnologia do Paulista — ciência, inovação e comunidade em uma experiência digital acessível.**
+**Portal seguro da Semana Nacional de Ciência e Tecnologia do Paulista — ciência, inovação e comunidade em uma experiência digital acessível.**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-111827?logo=nextdotjs)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2-0ea5e9?logo=react)](https://react.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169e1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Better Auth](https://img.shields.io/badge/Auth-MFA_%2B_RBAC-7c3aed)](https://www.better-auth.com/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss)](https://tailwindcss.com/)
 </div>
 
 ![Página inicial do portal SNCT Paulista 2026](docs/assets/home-desktop.png)
 
 ## Sobre o projeto
 
-O SNCT Paulista 2026 reúne a presença pública do evento e sua operação em uma única aplicação. O portal apresenta notícias oficiais, programação, editais, parceiros e localização; visitantes podem se cadastrar e receber uma credencial por QR Code; equipes credenciadas fazem check-in e registram a entrega de brindes; administradores mantêm o conteúdo sem editar código.
+O SNCT Paulista 2026 reúne a presença pública e a operação do evento em uma aplicação. O portal apresenta notícias oficiais, programação, editais, parceiros e localização; visitantes criam uma credencial QR; equipes fazem check-in e registram brindes; administradores mantêm o conteúdo sem editar código.
 
 ## Principais recursos
 
-- Portal público responsivo com hero animada, notícias, editais, agenda, mapa, parceiros e perguntas frequentes.
-- Notícias obtidas em tempo real pela API WordPress oficial da [Prefeitura do Paulista](https://paulista.pe.gov.br/).
-- Cadastro e autenticação com perfis de visitante, equipe e administrador.
-- Credencial digital individual com QR Code.
-- Leitura de QR Code para check-in e controle de entrega de brindes.
-- Painel no-code para gerenciar usuários, programação, editais, anexos, parceiros e conteúdo da hero.
-- Upload protegido de PDF, DOC, DOCX, ODT, XLS e XLSX, limitado a 10 MB por arquivo.
-- Navegação mobile em menu lateral, foco visível, contraste reforçado e respeito a `prefers-reduced-motion`.
+- Portal público responsivo com hero animada, notícias, editais, agenda, mapa, parceiros e FAQ.
+- Notícias obtidas pela API WordPress oficial da [Prefeitura do Paulista](https://paulista.pe.gov.br/).
+- Autenticação PostgreSQL com sessões revogáveis, verificação de e-mail e recuperação de senha.
+- MFA TOTP obrigatório para equipe e administradores, com códigos de recuperação e bloqueio de tentativas.
+- Credencial individual com QR Code rotacionável, revogável e com validade.
+- Scanner protegido para check-in e controle idempotente de entrega de brindes.
+- Painel no-code com auditoria para usuários, programação, editais, anexos, parceiros e hero.
+- Anexos validados por conteúdo, analisados pelo ClamAV e criptografados com AES-256-GCM.
+- Direitos LGPD: aviso de privacidade, consentimento, exportação e solicitação de exclusão.
+- CSP com nonce, headers de segurança, proteção CSRF/origin e rate limiting persistente.
 
 ### Responsivo por padrão
 
@@ -38,111 +41,120 @@ O SNCT Paulista 2026 reúne a presença pública do evento e sua operação em u
 
 ```mermaid
 flowchart LR
-    U[Visitante] --> APP[Next.js App Router]
-    S[Equipe] --> APP
-    A[Administrador] --> APP
-
-    APP --> UI[React + shadcn/ui]
-    APP --> API[Route Handlers]
-    APP --> NEWS[API WordPress oficial]
-    APP --> MAP[Google Maps Embed]
-
-    API --> AUTH[Sessão assinada + RBAC]
-    API --> STORE[(.data/snct-store.json)]
-    API --> FILES[(.data/uploads)]
-
-    AUTH --> STORE
+    U[Visitante / Equipe / Admin] --> PX[Next.js Proxy<br/>CSP + headers]
+    PX --> APP[Next.js App Router]
+    APP --> AUTH[Better Auth<br/>MFA + sessões + e-mail]
+    APP --> API[Route Handlers<br/>RBAC + CSRF + rate limit]
+    APP --> NEWS[WordPress oficial]
+    APP --> MAP[Google Maps]
+    AUTH --> PG[(PostgreSQL)]
+    API --> PG
+    API --> AV[ClamAV]
+    AUTH --> SMTP[SMTP]
 ```
 
-A aplicação usa componentes de servidor para compor páginas e buscar dados, componentes de cliente nas experiências interativas e Route Handlers como fronteira entre a interface e os dados administrativos. Consulte a [documentação de arquitetura](docs/architecture.md) para fluxos, modelo de dados, segurança e orientações de implantação.
+Server Components compõem as páginas e consultam o PostgreSQL diretamente. Componentes de cliente usam Route Handlers como fronteira para mutações. Toda autorização sensível é repetida no servidor. Consulte a [arquitetura detalhada](docs/architecture.md).
 
-## Perfis e jornadas
+## Perfis
 
-| Perfil        | Jornada principal                                                     |
-| ------------- | --------------------------------------------------------------------- |
-| Público       | Consulta notícias, programação, editais, parceiros, localização e FAQ |
-| Visitante     | Cria conta, entra no portal e apresenta sua credencial em QR Code     |
-| Equipe        | Lê a credencial, confirma check-in e registra a entrega do brinde     |
-| Administrador | Gerencia pessoas, programação, editais, documentos, parceiros e hero  |
+| Perfil        | Capacidades                                                             |
+| ------------- | ----------------------------------------------------------------------- |
+| Público       | Notícias, programação, editais, parceiros, localização e FAQ            |
+| Visitante     | Cadastro verificado, credencial QR, exportação e exclusão de dados      |
+| Equipe        | MFA obrigatório, scanner, check-in e registro de brindes                |
+| Administrador | MFA obrigatório, painel no-code, usuários, conteúdo, anexos e auditoria |
 
 ## Stack
 
 - **Aplicação:** Next.js 16, React 19 e TypeScript.
 - **Interface:** Tailwind CSS 4, shadcn/ui, Base UI e Lucide React.
-- **Movimento:** Motion e Paper Design Shaders.
-- **Formulários e experiência:** Sonner, React Day Picker, Embla Carousel e QR Scanner.
-- **Qualidade:** ESLint, Prettier, TypeScript e Vitest.
-- **Persistência atual:** JSON e arquivos no filesystem local, com escrita serializada e atômica.
+- **Autenticação:** Better Auth, Argon2id, MFA TOTP e sessões em banco.
+- **Dados:** PostgreSQL e migrações SQL explícitas.
+- **Arquivos:** PostgreSQL `bytea`, AES-256-GCM, detecção de assinatura e ClamAV.
+- **E-mail:** SMTP com Nodemailer.
+- **Qualidade:** ESLint, Prettier, Vitest, npm audit, Dependabot e CodeQL.
 
-## Estrutura do repositório
+## Estrutura
 
 ```text
+db/migrations/           # Esquema PostgreSQL versionado
+scripts/                 # Migração, retenção e validação do ambiente
 src/
-├── app/                 # Páginas, layouts e Route Handlers
-│   ├── api/             # Autenticação, administração, staff e documentos
-│   ├── cadastro/        # Cadastro público
-│   ├── editais/         # Editais e anexos
-│   ├── login/           # Entrada por perfil
-│   └── perfil/          # Painéis de visitante, equipe e administrador
-├── components/
-│   ├── auth/            # Formulários e moldura de autenticação
-│   ├── dashboard/       # Painel no-code, scanner e credencial
-│   ├── event/           # Hero, notícias, destaques, parceiros e rodapé
-│   └── ui/              # Primitivas reutilizáveis do design system
-├── config/              # Conteúdo inicial e configurações públicas
-└── lib/                 # Auth, integração de notícias, store e tipos
-
-docs/                    # Arquitetura, operação e design system
-public/                  # Imagens públicas e logotipo
-.data/                   # Dados e uploads locais (ignorado pelo Git)
+├── app/                 # Páginas e Route Handlers
+├── components/          # Auth, dashboards, portal e design system
+├── config/              # Conteúdo inicial
+├── lib/                 # Auth, DB, segurança, auditoria e integrações
+└── proxy.ts             # CSP com nonce e headers globais
+docs/                    # Arquitetura, segurança, implantação e operação
+public/                  # Imagens públicas
+compose.yaml             # PostgreSQL e ClamAV para desenvolvimento
 ```
 
 ## Executando localmente
 
-Requisitos: Node.js 20.9 ou superior e npm.
+Requisitos: Node.js 20.9+, npm e uma instância PostgreSQL. Docker é opcional, mas facilita PostgreSQL e ClamAV.
 
 ```powershell
 git clone https://github.com/diegocoodes/snct.git
 Set-Location snct
 npm install
 Copy-Item .env.example .env.local
+```
+
+Gere segredos diferentes para autenticação, rate limiting e criptografia. Para desenvolvimento com Docker:
+
+```powershell
+$env:POSTGRES_PASSWORD="defina-uma-senha-local-forte"
+docker compose up -d
+npm run db:migrate
 npm run dev
 ```
 
-Acesse `http://localhost:3000`.
+Acesse `http://localhost:3000`. O Docker não é obrigatório: `DATABASE_URL` pode apontar para um PostgreSQL externo e `CLAMAV_HOST` para um daemon ClamAV acessível pela aplicação.
 
-### Variáveis de ambiente
+## Variáveis essenciais
 
-| Variável              | Obrigatória | Finalidade                                                           |
-| --------------------- | ----------- | -------------------------------------------------------------------- |
-| `SNCT_SESSION_SECRET` | Sim         | Assina e valida o cookie de sessão; use um segredo longo e aleatório |
-| `SNCT_ADMIN_EMAIL`    | Sim         | Identificador da conta administrativa inicial                        |
-| `SNCT_ADMIN_PASSWORD` | Sim         | Senha da conta administrativa inicial                                |
+| Variável                                   | Finalidade                                     |
+| ------------------------------------------ | ---------------------------------------------- |
+| `DATABASE_URL`                             | Conexão PostgreSQL                             |
+| `BETTER_AUTH_URL`                          | URL canônica HTTPS do portal                   |
+| `BETTER_AUTH_SECRET`                       | Criptografia e assinatura do Better Auth       |
+| `SNCT_RATE_LIMIT_SECRET`                   | HMAC de IPs e identificadores dos limitadores  |
+| `SNCT_DATA_ENCRYPTION_KEYS`                | Chaves versionadas AES-256-GCM para anexos     |
+| `SNCT_ADMIN_EMAIL` / `SNCT_ADMIN_PASSWORD` | Bootstrap único do administrador               |
+| `SNCT_SMTP_*` / `SNCT_EMAIL_FROM`          | Verificação, recuperação e exclusão por e-mail |
+| `CLAMAV_HOST` / `CLAMAV_PORT`              | Análise antivírus obrigatória em produção      |
+| `NEXT_PUBLIC_PRIVACY_CONTACT`              | Canal do encarregado/controlador               |
 
-Nunca versionar `.env.local`, credenciais ou o diretório `.data`. Para desenvolvimento com o MCP do 21st.dev, mantenha `API_KEY_21ST` apenas no ambiente do usuário; ela não é uma variável de execução da aplicação.
+Use `.env.example` como referência. Nunca envie `.env.local`, dumps, chaves ou credenciais ao Git. O administrador configurado no ambiente é criado no PostgreSQL no primeiro login, com senha convertida para Argon2id.
 
-## Comandos disponíveis
+## Comandos
 
 ```powershell
-npm run dev          # servidor de desenvolvimento
-npm run build        # build otimizado de produção
-npm run start        # executa o build de produção
-npm run lint         # análise estática
-npm run typecheck    # validação de tipos
-npm run test:run     # testes automatizados
-npm run format       # formatação automática
-npm run format:check # conferência de formatação
+npm run dev                # desenvolvimento
+npm run build              # build de produção
+npm run start              # executa o build
+npm run db:migrate         # aplica migrações SQL com checksum
+npm run db:cleanup         # aplica a política de retenção
+npm run security:check-env # valida configuração de produção
+npm run security:audit     # vulnerabilidades das dependências de produção
+npm run lint
+npm run typecheck
+npm run test:run
+npm run format:check
 ```
 
-## Persistência e produção
+## Segurança
 
-No ambiente atual, usuários e conteúdo administrativo ficam em `.data/snct-store.json`; anexos ficam em `.data/uploads`. Essa estratégia facilita demonstração e desenvolvimento em um único servidor, mas **não é apropriada para plataformas serverless ou múltiplas instâncias**, onde o filesystem pode ser efêmero.
+O sistema aplica defesa em profundidade: Argon2id, MFA, sessão revogável, autorização server-side, proteção de origem, rate limiting, CSP, criptografia de anexos, antivírus, auditoria e automação de dependências. Isso reduz riscos, mas não substitui TLS, firewall/WAF, backups, monitoramento, revisão de infraestrutura e teste de intrusão antes do evento.
 
-Antes de publicar em produção, migre o store para um banco persistente e os anexos para object storage. Mantenha as verificações de perfil no servidor, configure HTTPS, faça backup dos dados e use segredos exclusivos do ambiente.
+Consulte o [modelo de ameaças e checklist de segurança](docs/security.md) e o [guia de implantação](docs/deployment.md).
 
 ## Documentação
 
-- [Arquitetura e fluxos técnicos](docs/architecture.md)
+- [Arquitetura e fluxos](docs/architecture.md)
+- [Segurança e resposta a incidentes](docs/security.md)
+- [Implantação PostgreSQL](docs/deployment.md)
 - [Guia do painel administrativo](docs/administration.md)
 - [Design system e acessibilidade](docs/design-system.md)
 

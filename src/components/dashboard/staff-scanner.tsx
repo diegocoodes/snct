@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { PublicUser } from "@/lib/snct-types";
+import { secureFetch } from "@/lib/secure-fetch";
 
 function StaffScanner() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,7 +36,7 @@ function StaffScanner() {
     if (!token || processingRef.current) return;
     processingRef.current = true;
     setLoading(true);
-    const response = await fetch("/api/staff", {
+    const response = await secureFetch("/api/staff", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, action }),

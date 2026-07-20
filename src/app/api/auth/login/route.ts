@@ -1,34 +1,59 @@
-import { authenticateUser, setSession } from "@/lib/auth";
-import type { UserRole } from "@/lib/snct-types";
+import { auth, ensureBootstrapAdmin } from "@/lib/auth";
+import { recordAuditEvent } from "@/lib/audit";
+import {
+  assertTrustedMutation,
+  enforceRateLimit,
+  securityErrorResponse,
+} from "@/lib/request-security";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<
-    string,
-    unknown
-  > | null;
-  const email = typeof body?.email === "string" ? body.email : "";
-  const password = typeof body?.password === "string" ? body.password : "";
-  const role = body?.role as UserRole | undefined;
+  try {
+    assertTrustedMutation(request);
+    const body = (await request.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null;
+    const email = typeof body?.email === "string" ? body.email.trim() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
 
-  if (
-    !email ||
-    !password ||
-    !["visitor", "staff", "admin"].includes(role ?? "")
-  ) {
-    return Response.json(
-      { error: "Preencha todos os campos." },
-      { status: 400 },
-    );
+    await enforceRateLimit({
+      request,
+      scope: "login",
+      identifier: email,
+      limit: 5,
+      windowSeconds: 60,
+    });
+
+    if (!email || !password) {
+      return Response.json(
+        { error: "Preencha todos os campos." },
+        { status: 400 },
+      );
+    }
+
+    await ensureBootstrapAdmin();
+    const response = await auth.api.signInEmail({
+      body: { email, password },
+      headers: request.headers,
+      asResponse: true,
+    });
+
+    await recordAuditEvent(request, {
+      action: "auth.login",
+      entity: "session",
+      outcome: response.ok ? "success" : "failure",
+      metadata: { status: response.status },
+    });
+    return response;
+  } catch (error) {
+    await recordAuditEvent(request, {
+      action: "auth.login",
+      entity: "session",
+      outcome:
+        error instanceof Response && error.status === 429
+          ? "blocked"
+          : "failure",
+    }).catch(() => {});
+    return securityErrorResponse(error);
   }
-
-  const session = await authenticateUser(email, password, role!);
-  if (!session) {
-    return Response.json(
-      { error: "E-mail, senha ou perfil de acesso inválido." },
-      { status: 401 },
-    );
-  }
-
-  await setSession(session);
-  return Response.json({ role: session.role });
 }

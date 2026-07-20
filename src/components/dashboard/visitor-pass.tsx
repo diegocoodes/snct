@@ -13,6 +13,7 @@ import {
 import QRCode from "qrcode";
 
 import { Badge } from "@/components/ui/badge";
+import { AccountSecurity } from "@/components/dashboard/account-security";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PublicUser } from "@/lib/snct-types";
@@ -167,22 +168,9 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="sm:col-span-2">
-            <CardContent>
-              <p className="text-xs tracking-wide text-blue-gray uppercase">
-                Hash exclusiva
-              </p>
-              <code className="mt-2 block break-all rounded-xl bg-black/25 p-3 text-xs leading-5 text-cyan-electric">
-                {visitor.visitorHash}
-              </code>
-              <p className="mt-3 text-xs leading-5 text-blue-gray">
-                Não compartilhe sua hash. Caso perca o QR Code, volte a este
-                perfil para baixá-lo novamente.
-              </p>
-            </CardContent>
-          </Card>
         </div>
       </div>
+      <AccountSecurity />
     </div>
   );
 }

@@ -1,185 +1,227 @@
 import "server-only";
 
-import {
-  createHmac,
-  randomBytes,
-  scrypt as scryptCallback,
-  timingSafeEqual,
-} from "node:crypto";
-import { promisify } from "node:util";
-import { cookies } from "next/headers";
+import { randomBytes } from "node:crypto";
+import { headers } from "next/headers";
+import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 
-import { readSnctStore } from "@/lib/snct-store";
-import type {
-  PublicUser,
-  SessionData,
-  StoredUser,
-  UserRole,
-} from "@/lib/snct-types";
+import { db, query } from "@/lib/db";
+import { sendSecurityEmail } from "@/lib/mailer";
+import { hashPassword, verifyPassword } from "@/lib/password";
+import type { PublicUser, SessionData, UserRole } from "@/lib/snct-types";
 
-const scrypt = promisify(scryptCallback);
-const sessionCookieName = "snct_session";
-const sessionDurationSeconds = 60 * 60 * 8;
+const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+const isProduction = process.env.NODE_ENV === "production";
 
-function getSessionSecret() {
-  const secret = process.env.SNCT_SESSION_SECRET;
-  if (!secret) {
-    throw new Error("SNCT_SESSION_SECRET não foi configurado.");
-  }
-  return secret;
-}
+export const auth = betterAuth({
+  appName: "SNCT Paulista 2026",
+  baseURL,
+  secret: process.env.BETTER_AUTH_SECRET ?? process.env.SNCT_SESSION_SECRET,
+  database: db,
+  trustedOrigins: [
+    baseURL,
+    ...(process.env.SNCT_TRUSTED_ORIGINS?.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean) ?? []),
+  ],
+  emailAndPassword: {
+    enabled: true,
+    minPasswordLength: 12,
+    maxPasswordLength: 128,
+    requireEmailVerification: isProduction,
+    autoSignIn: !isProduction,
+    revokeSessionsOnPasswordReset: true,
+    password: {
+      hash: hashPassword,
+      verify: ({ hash, password }) => verifyPassword(hash, password),
+    },
+    sendResetPassword: async ({ user, url }) => {
+      await sendSecurityEmail({
+        to: user.email,
+        subject: "Redefinição de senha — SNCT Paulista 2026",
+        heading: "Redefina sua senha",
+        message:
+          "Recebemos uma solicitação para redefinir a senha da sua conta.",
+        actionLabel: "Criar nova senha",
+        actionUrl: url,
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: isProduction,
+    sendOnSignIn: true,
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendSecurityEmail({
+        to: user.email,
+        subject: "Confirme seu e-mail — SNCT Paulista 2026",
+        heading: "Confirme seu e-mail",
+        message:
+          "Use o botão abaixo para confirmar o cadastro e ativar sua credencial.",
+        actionLabel: "Confirmar cadastro",
+        actionUrl: url,
+      });
+    },
+  },
+  user: {
+    modelName: "auth_users",
+    additionalFields: {
+      role: {
+        type: ["visitor", "staff", "admin"],
+        required: true,
+        defaultValue: "visitor",
+        input: false,
+      },
+    },
+    deleteUser: {
+      enabled: true,
+      deleteTokenExpiresIn: 60 * 30,
+      sendDeleteAccountVerification: isProduction
+        ? async ({ user, url }) => {
+            await sendSecurityEmail({
+              to: user.email,
+              subject: "Exclusão de conta — SNCT Paulista 2026",
+              heading: "Confirme a exclusão da conta",
+              message:
+                "Esta ação remove sua conta e sua credencial permanentemente.",
+              actionLabel: "Excluir minha conta",
+              actionUrl: url,
+            });
+          }
+        : undefined,
+      afterDelete: async (user) => {
+        await query(
+          `UPDATE snct_privacy_requests
+           SET status = 'completed', completed_at = now()
+           WHERE user_id = $1 AND request_type = 'deletion' AND status <> 'completed'`,
+          [user.id],
+        );
+      },
+    },
+  },
+  session: {
+    modelName: "auth_sessions",
+    expiresIn: 60 * 60 * 8,
+    updateAge: 60 * 60,
+    freshAge: 60 * 15,
+    cookieCache: { enabled: false },
+  },
+  account: { modelName: "auth_accounts" },
+  verification: { modelName: "auth_verifications" },
+  rateLimit: {
+    enabled: true,
+    storage: "database",
+    modelName: "auth_rate_limits",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 60 * 10, max: 3 },
+      "/request-password-reset": { window: 60 * 15, max: 3 },
+      "/two-factor/*": { window: 60, max: 5 },
+    },
+  },
+  advanced: {
+    useSecureCookies: isProduction,
+    cookiePrefix: "snct",
+    defaultCookieAttributes: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProduction,
+      path: "/",
+    },
+  },
+  telemetry: { enabled: false },
+  plugins: [
+    twoFactor({
+      issuer: "SNCT Paulista 2026",
+      twoFactorTable: "auth_two_factors",
+      twoFactorCookieMaxAge: 60 * 10,
+      trustDeviceMaxAge: 60 * 60 * 24 * 14,
+      accountLockout: {
+        enabled: true,
+        maxFailedAttempts: 5,
+        durationSeconds: 60 * 15,
+      },
+    }),
+  ],
+});
 
-function sign(value: string) {
-  return createHmac("sha256", getSessionSecret())
-    .update(value)
-    .digest("base64url");
-}
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  emailVerified: boolean;
+  role: UserRole;
+  twoFactorEnabled?: boolean | null;
+};
 
-function safeEqual(left: string, right: string) {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  return (
-    leftBuffer.length === rightBuffer.length &&
-    timingSafeEqual(leftBuffer, rightBuffer)
-  );
-}
-
-export async function hashPassword(password: string) {
-  const salt = randomBytes(16).toString("hex");
-  const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
-  return `${salt}:${derivedKey.toString("hex")}`;
-}
-
-export async function verifyPassword(password: string, storedHash: string) {
-  const [salt, key] = storedHash.split(":");
-  if (!salt || !key) return false;
-  const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
-  return safeEqual(derivedKey.toString("hex"), key);
-}
-
-export function createVisitorHash() {
-  return createHmac("sha256", randomBytes(32))
-    .update(`${Date.now()}-${randomBytes(16).toString("hex")}`)
-    .digest("hex");
-}
-
-export function toPublicUser(user: StoredUser): PublicUser {
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    age: user.age,
-    role: user.role,
-    visitorHash: user.visitorHash,
-    createdAt: user.createdAt,
-    checkedInAt: user.checkedInAt,
-    giftDeliveredAt: user.giftDeliveredAt,
-  };
-}
-
-export async function authenticateUser(
-  email: string,
-  password: string,
-  role: UserRole,
-): Promise<SessionData | null> {
-  const normalizedEmail = email.trim().toLowerCase();
-  const expiresAt = Date.now() + sessionDurationSeconds * 1000;
-
-  if (role === "admin") {
-    const adminEmail = process.env.SNCT_ADMIN_EMAIL?.toLowerCase();
-    const adminPassword = process.env.SNCT_ADMIN_PASSWORD;
-    if (
-      adminEmail &&
-      adminPassword &&
-      safeEqual(normalizedEmail, adminEmail) &&
-      safeEqual(password, adminPassword)
-    ) {
-      return {
-        userId: "admin",
-        name: "Administrador SNCT",
-        email: adminEmail,
-        role,
-        expiresAt,
-      };
-    }
-    return null;
-  }
-
-  const store = await readSnctStore();
-  const user = store.users.find(
-    (candidate) =>
-      candidate.email.toLowerCase() === normalizedEmail &&
-      candidate.role === role,
-  );
-  if (!user || !(await verifyPassword(password, user.passwordHash))) {
-    return null;
-  }
-
+export async function getSession(): Promise<SessionData | null> {
+  const result = await auth.api.getSession({ headers: await headers() });
+  if (!result) return null;
+  const user = result.user as typeof result.user & AuthUser;
   return {
     userId: user.id,
     name: user.name,
     email: user.email,
     role: user.role,
-    expiresAt,
+    emailVerified: user.emailVerified,
+    mfaEnabled: Boolean(user.twoFactorEnabled),
+    expiresAt: new Date(result.session.expiresAt).getTime(),
   };
-}
-
-function encodeSession(session: SessionData) {
-  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
-  return `${payload}.${sign(payload)}`;
-}
-
-function decodeSession(token: string): SessionData | null {
-  const [payload, signature] = token.split(".");
-  if (!payload || !signature || !safeEqual(sign(payload), signature)) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as SessionData;
-    return session.expiresAt > Date.now() ? session : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function setSession(session: SessionData) {
-  const cookieStore = await cookies();
-  cookieStore.set(sessionCookieName, encodeSession(session), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: sessionDurationSeconds,
-    priority: "high",
-  });
-}
-
-export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(sessionCookieName);
-}
-
-export async function getSession(): Promise<SessionData | null> {
-  const token = (await cookies()).get(sessionCookieName)?.value;
-  if (!token) return null;
-  const session = decodeSession(token);
-  if (!session) return null;
-
-  if (session.role !== "admin") {
-    const store = await readSnctStore();
-    const stillExists = store.users.some(
-      (user) => user.id === session.userId && user.role === session.role,
-    );
-    if (!stillExists) return null;
-  }
-
-  return session;
 }
 
 export async function requireRole(...roles: UserRole[]) {
   const session = await getSession();
-  return session && roles.includes(session.role) ? session : null;
+  if (!session || !roles.includes(session.role)) return null;
+  if (
+    (session.role === "admin" || session.role === "staff") &&
+    !session.mfaEnabled
+  ) {
+    return null;
+  }
+  return session;
+}
+
+export function createVisitorHash() {
+  return randomBytes(32).toString("base64url");
+}
+
+export function toPublicUser(user: PublicUser): PublicUser {
+  return user;
+}
+
+export async function ensureBootstrapAdmin() {
+  const email = process.env.SNCT_ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.SNCT_ADMIN_PASSWORD;
+  if (!email || !password) return;
+
+  const existing = await query<{ id: string; role: UserRole }>(
+    `SELECT id, role FROM auth_users WHERE lower(email) = $1 LIMIT 1`,
+    [email],
+  );
+  if (existing.rows[0]) {
+    if (existing.rows[0].role !== "admin") {
+      throw new Error(
+        "SNCT_ADMIN_EMAIL já pertence a uma conta não administrativa.",
+      );
+    }
+    return;
+  }
+
+  const created = await auth.api.signUpEmail({
+    body: {
+      email,
+      password,
+      name: "Administrador SNCT",
+    },
+  });
+  if (!created.user?.id)
+    throw new Error("Não foi possível criar o administrador inicial.");
+
+  await query(
+    `UPDATE auth_users SET role = 'admin', "emailVerified" = true WHERE id = $1`,
+    [created.user.id],
+  );
 }

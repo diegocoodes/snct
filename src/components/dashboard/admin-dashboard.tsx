@@ -15,6 +15,7 @@ import {
   Plus,
   Save,
   ScanLine,
+  ScrollText,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -32,9 +33,11 @@ import type {
   ManagedEvent,
   ManagedNotice,
   ManagedPartner,
+  AuditLog,
   PublicUser,
   SiteSettings,
 } from "@/lib/snct-types";
+import { secureFetch } from "@/lib/secure-fetch";
 
 type AdminDashboardProps = {
   users: PublicUser[];
@@ -42,6 +45,7 @@ type AdminDashboardProps = {
   notices: ManagedNotice[];
   partners: ManagedPartner[];
   settings: SiteSettings;
+  auditLogs: AuditLog[];
 };
 
 function formValues(form: HTMLFormElement) {
@@ -54,6 +58,7 @@ function AdminDashboard({
   notices,
   partners,
   settings,
+  auditLogs,
 }: AdminDashboardProps) {
   const router = useRouter();
   const [busyAction, setBusyAction] = useState("");
@@ -64,7 +69,7 @@ function AdminDashboard({
   ) {
     const actionKey = `${payload.action}-${payload.id ?? payload.userId ?? "new"}`;
     setBusyAction(actionKey);
-    const response = await fetch("/api/admin", {
+    const response = await secureFetch("/api/admin", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -83,7 +88,7 @@ function AdminDashboard({
   async function mutateForm(payload: FormData, successMessage: string) {
     const id = String(payload.get("id") ?? "new");
     setBusyAction(`saveNotice-${id}`);
-    const response = await fetch("/api/admin", {
+    const response = await secureFetch("/api/admin", {
       method: "POST",
       body: payload,
     });
@@ -182,6 +187,9 @@ function AdminDashboard({
           </TabsTrigger>
           <TabsTrigger value="partners">
             <ShieldCheck aria-hidden /> Parceiros
+          </TabsTrigger>
+          <TabsTrigger value="audit">
+            <ScrollText aria-hidden /> Auditoria
           </TabsTrigger>
         </TabsList>
 
@@ -309,7 +317,8 @@ function AdminDashboard({
                       id="new-user-password"
                       name="password"
                       type="password"
-                      minLength={8}
+                      minLength={12}
+                      maxLength={128}
                       required
                     />
                   </div>
@@ -821,6 +830,77 @@ function AdminDashboard({
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        <TabsContent value="audit" className="pt-7">
+          <Card className="border-cyan-electric/15">
+            <CardHeader>
+              <CardTitle>Trilha de auditoria</CardTitle>
+              <p className="text-sm leading-6 text-blue-gray">
+                Últimas ações sensíveis registradas pelo servidor. Endereços e
+                identificadores técnicos são armazenados apenas como hashes.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full min-w-3xl text-left text-sm">
+                  <thead className="bg-white/5 text-xs tracking-wide text-blue-gray uppercase">
+                    <tr>
+                      <th className="px-4 py-3">Data</th>
+                      <th className="px-4 py-3">Ação</th>
+                      <th className="px-4 py-3">Perfil</th>
+                      <th className="px-4 py-3">Objeto</th>
+                      <th className="px-4 py-3">Resultado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="whitespace-nowrap px-4 py-3 text-blue-gray">
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            dateStyle: "short",
+                            timeStyle: "medium",
+                          }).format(new Date(log.createdAt))}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-ice-white">
+                          {log.action}
+                        </td>
+                        <td className="px-4 py-3 text-blue-gray">
+                          {log.actorRole ?? "público"}
+                        </td>
+                        <td className="px-4 py-3 text-blue-gray">
+                          {log.entity}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant={
+                              log.outcome === "failure"
+                                ? "destructive"
+                                : "outline"
+                            }
+                            className={
+                              log.outcome === "success"
+                                ? "border-emerald-400/30 text-emerald-300"
+                                : log.outcome === "blocked"
+                                  ? "border-amber-400/30 text-amber-300"
+                                  : undefined
+                            }
+                          >
+                            {log.outcome}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!auditLogs.length ? (
+                <p className="py-8 text-center text-sm text-blue-gray">
+                  Nenhum evento de segurança registrado.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
