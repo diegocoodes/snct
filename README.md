@@ -1,85 +1,153 @@
+<div align="center">
+  <img src="public/images/cienciasemfundo.png" width="230" alt="Logotipo Ciência e Tecnologia" />
+
 # SNCT Paulista 2026
 
-Plataforma web da Semana Nacional de Ciência e Tecnologia — Paulista 2026. O projeto será desenvolvido de forma incremental para atender o site público, inscrições, credencial digital segura, área do participante, check-in por QR Code, entrega de brindes e administração do evento.
+**Portal da Semana Nacional de Ciência e Tecnologia do Paulista — ciência, inovação e comunidade em uma experiência digital acessível.**
 
-## Tecnologias
+[![Next.js](https://img.shields.io/badge/Next.js-16.2-111827?logo=nextdotjs)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.2-0ea5e9?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss)](https://tailwindcss.com/)
+</div>
 
-- Next.js 16 com App Router, React 19 e TypeScript
-- Tailwind CSS 4 e shadcn/ui
-- Inter para texto e Orbitron para destaques
-- ESLint, Prettier e Vitest
+![Página inicial do portal SNCT Paulista 2026](docs/assets/home-desktop.png)
 
-## Requisitos
+## Sobre o projeto
 
-- Node.js 20.9 ou superior
-- npm
-- Git
-- Codex CLI para a configuração dos MCPs de desenvolvimento
+O SNCT Paulista 2026 reúne a presença pública do evento e sua operação em uma única aplicação. O portal apresenta notícias oficiais, programação, editais, parceiros e localização; visitantes podem se cadastrar e receber uma credencial por QR Code; equipes credenciadas fazem check-in e registram a entrega de brindes; administradores mantêm o conteúdo sem editar código.
 
-## Instalação local
+## Principais recursos
+
+- Portal público responsivo com hero animada, notícias, editais, agenda, mapa, parceiros e perguntas frequentes.
+- Notícias obtidas em tempo real pela API WordPress oficial da [Prefeitura do Paulista](https://paulista.pe.gov.br/).
+- Cadastro e autenticação com perfis de visitante, equipe e administrador.
+- Credencial digital individual com QR Code.
+- Leitura de QR Code para check-in e controle de entrega de brindes.
+- Painel no-code para gerenciar usuários, programação, editais, anexos, parceiros e conteúdo da hero.
+- Upload protegido de PDF, DOC, DOCX, ODT, XLS e XLSX, limitado a 10 MB por arquivo.
+- Navegação mobile em menu lateral, foco visível, contraste reforçado e respeito a `prefers-reduced-motion`.
+
+### Responsivo por padrão
+
+<p align="center">
+  <img src="docs/assets/home-mobile.png" width="320" alt="Hero do portal SNCT em um dispositivo móvel" />
+</p>
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    U[Visitante] --> APP[Next.js App Router]
+    S[Equipe] --> APP
+    A[Administrador] --> APP
+
+    APP --> UI[React + shadcn/ui]
+    APP --> API[Route Handlers]
+    APP --> NEWS[API WordPress oficial]
+    APP --> MAP[Google Maps Embed]
+
+    API --> AUTH[Sessão assinada + RBAC]
+    API --> STORE[(.data/snct-store.json)]
+    API --> FILES[(.data/uploads)]
+
+    AUTH --> STORE
+```
+
+A aplicação usa componentes de servidor para compor páginas e buscar dados, componentes de cliente nas experiências interativas e Route Handlers como fronteira entre a interface e os dados administrativos. Consulte a [documentação de arquitetura](docs/architecture.md) para fluxos, modelo de dados, segurança e orientações de implantação.
+
+## Perfis e jornadas
+
+| Perfil        | Jornada principal                                                     |
+| ------------- | --------------------------------------------------------------------- |
+| Público       | Consulta notícias, programação, editais, parceiros, localização e FAQ |
+| Visitante     | Cria conta, entra no portal e apresenta sua credencial em QR Code     |
+| Equipe        | Lê a credencial, confirma check-in e registra a entrega do brinde     |
+| Administrador | Gerencia pessoas, programação, editais, documentos, parceiros e hero  |
+
+## Stack
+
+- **Aplicação:** Next.js 16, React 19 e TypeScript.
+- **Interface:** Tailwind CSS 4, shadcn/ui, Base UI e Lucide React.
+- **Movimento:** Motion e Paper Design Shaders.
+- **Formulários e experiência:** Sonner, React Day Picker, Embla Carousel e QR Scanner.
+- **Qualidade:** ESLint, Prettier, TypeScript e Vitest.
+- **Persistência atual:** JSON e arquivos no filesystem local, com escrita serializada e atômica.
+
+## Estrutura do repositório
+
+```text
+src/
+├── app/                 # Páginas, layouts e Route Handlers
+│   ├── api/             # Autenticação, administração, staff e documentos
+│   ├── cadastro/        # Cadastro público
+│   ├── editais/         # Editais e anexos
+│   ├── login/           # Entrada por perfil
+│   └── perfil/          # Painéis de visitante, equipe e administrador
+├── components/
+│   ├── auth/            # Formulários e moldura de autenticação
+│   ├── dashboard/       # Painel no-code, scanner e credencial
+│   ├── event/           # Hero, notícias, destaques, parceiros e rodapé
+│   └── ui/              # Primitivas reutilizáveis do design system
+├── config/              # Conteúdo inicial e configurações públicas
+└── lib/                 # Auth, integração de notícias, store e tipos
+
+docs/                    # Arquitetura, operação e design system
+public/                  # Imagens públicas e logotipo
+.data/                   # Dados e uploads locais (ignorado pelo Git)
+```
+
+## Executando localmente
+
+Requisitos: Node.js 20.9 ou superior e npm.
 
 ```powershell
+git clone https://github.com/diegocoodes/snct.git
+Set-Location snct
 npm install
 Copy-Item .env.example .env.local
 npm run dev
 ```
 
-O endereço padrão é `http://localhost:3000`.
+Acesse `http://localhost:3000`.
 
-## Variáveis de ambiente
+### Variáveis de ambiente
 
-Use `.env.example` como referência. Nunca envie arquivos `.env` ao repositório. A variável `API_KEY_21ST` não pertence ao `.env.example`; configure-a no ambiente de usuário do Windows:
+| Variável              | Obrigatória | Finalidade                                                           |
+| --------------------- | ----------- | -------------------------------------------------------------------- |
+| `SNCT_SESSION_SECRET` | Sim         | Assina e valida o cookie de sessão; use um segredo longo e aleatório |
+| `SNCT_ADMIN_EMAIL`    | Sim         | Identificador da conta administrativa inicial                        |
+| `SNCT_ADMIN_PASSWORD` | Sim         | Senha da conta administrativa inicial                                |
 
-```powershell
-[Environment]::SetEnvironmentVariable("API_KEY_21ST", "SUA_CHAVE", "User")
-```
+Nunca versionar `.env.local`, credenciais ou o diretório `.data`. Para desenvolvimento com o MCP do 21st.dev, mantenha `API_KEY_21ST` apenas no ambiente do usuário; ela não é uma variável de execução da aplicação.
 
-Feche e reabra o VS Code depois da alteração. Nunca registre a chave real em documentação, código ou histórico Git.
-
-## MCPs
-
-Os servidores `shadcn` e `21st` estão configurados em `.vscode/mcp.json` e no Codex CLI. O `21st` só será autenticado depois que a variável `API_KEY_21ST` estiver disponível e o VS Code for reiniciado. Verifique o estado com:
+## Comandos disponíveis
 
 ```powershell
-codex mcp list
+npm run dev          # servidor de desenvolvimento
+npm run build        # build otimizado de produção
+npm run start        # executa o build de produção
+npm run lint         # análise estática
+npm run typecheck    # validação de tipos
+npm run test:run     # testes automatizados
+npm run format       # formatação automática
+npm run format:check # conferência de formatação
 ```
 
-Para recriar a configuração do shadcn:
+## Persistência e produção
 
-```powershell
-npx shadcn@latest mcp init --client vscode
-codex mcp add shadcn -- npx shadcn@latest mcp
-```
+No ambiente atual, usuários e conteúdo administrativo ficam em `.data/snct-store.json`; anexos ficam em `.data/uploads`. Essa estratégia facilita demonstração e desenvolvimento em um único servidor, mas **não é apropriada para plataformas serverless ou múltiplas instâncias**, onde o filesystem pode ser efêmero.
 
-Para recriar a configuração do 21st no Codex sem gravar a chave em arquivo:
+Antes de publicar em produção, migre o store para um banco persistente e os anexos para object storage. Mantenha as verificações de perfil no servidor, configure HTTPS, faça backup dos dados e use segredos exclusivos do ambiente.
 
-```powershell
-codex mcp add 21st --url https://21st.dev/api/mcp --bearer-token-env-var API_KEY_21ST
-```
+## Documentação
 
-## Scripts
+- [Arquitetura e fluxos técnicos](docs/architecture.md)
+- [Guia do painel administrativo](docs/administration.md)
+- [Design system e acessibilidade](docs/design-system.md)
 
-```powershell
-npm run dev
-npm run lint
-npm run typecheck
-npm run test:run
-npm run build
-npm run format
-npm run format:check
-```
+---
 
-## Estrutura
-
-- `src/app`: rotas e layouts do App Router
-- `src/components`: componentes de UI e domínios do sistema
-- `src/config`, `src/constants`: configuração estática e constantes
-- `src/lib`, `src/services`: infraestrutura e serviços
-- `src/validations`: schemas e regras de validação
-- `src/emails`: templates de e-mail
-- `prisma`: schema, migrations e seed do banco
-- `public`: imagens e ativos públicos
-
-## Estado atual
-
-Etapa 1 concluída: inicialização, ferramentas de qualidade, estrutura base, fontes, tema e tokens. A Etapa 2 está parcialmente concluída, com os MCPs registrados e aguardando apenas a configuração segura da chave do 21st.dev para autenticação. Funcionalidades, autenticação, banco de dados, segurança, LGPD, testes de fluxo e Docker serão adicionados nas etapas seguintes e documentados conforme forem implementados.
+<div align="center">
+  Desenvolvido para a Semana Nacional de Ciência e Tecnologia do Paulista 2026.
+</div>

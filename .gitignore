@@ -37,6 +37,9 @@ yarn-error.log*
 .env.production.local
 .env.test.local
 
+# local application data
+/.data/
+
 # vercel
 .vercel
 
