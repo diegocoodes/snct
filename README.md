@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="frontend/public/images/cienciasemfundo.png" width="230" alt="Logotipo Ciência e Tecnologia" />
+  <img src="./docs/assets/cienciasemfundo.png" width="230" alt="Logotipo Ciência e Tecnologia" />
 
 # SNCT Paulista 2026
 
@@ -12,7 +12,9 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript)](https://www.typescriptlang.org/)
 </div>
 
-![Página inicial do portal SNCT Paulista 2026](frontend/docs/assets/home-desktop.png)
+<p align="center">
+  <img src="./docs/assets/home-desktop.png" alt="Página inicial do portal SNCT Paulista 2026" width="100%" />
+</p>
 
 ## Sobre o projeto
 
@@ -34,7 +36,7 @@ O SNCT Paulista 2026 reúne a presença pública e a operação do evento em uma
 ### Responsivo por padrão
 
 <p align="center">
-  <img src="frontend/docs/assets/home-mobile.png" width="320" alt="Hero do portal SNCT em um dispositivo móvel" />
+  <img src="./docs/assets/home-mobile.png" width="320" alt="Hero do portal SNCT em um dispositivo móvel" />
 </p>
 
 ## Arquitetura
