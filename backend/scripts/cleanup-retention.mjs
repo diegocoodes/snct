@@ -1,60 +1,75 @@
 import process from "node:process";
-import { Pool } from "pg";
+import mysql from "mysql2/promise";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL não foi configurada.");
 }
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_SSL === "require"
-      ? {
-          rejectUnauthorized:
-            process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
-        }
-      : undefined,
+const pool = mysql.createPool({
+  uri: process.env.DATABASE_URL,
+  connectionLimit: 5,
 });
 
-const client = await pool.connect();
+const connection = await pool.getConnection();
 try {
-  await client.query("BEGIN");
-  const expiredVisitors = await client.query(`
+  await connection.beginTransaction();
+
+  const [expiredVisitors] = await connection.query(
+    `
     DELETE FROM auth_users
     WHERE role = 'visitor'
       AND id IN (
-        SELECT user_id FROM snct_profiles
-        WHERE retention_expires_at <= now()
+        SELECT user_id FROM (
+          SELECT user_id FROM snct_profiles
+          WHERE retention_expires_at <= NOW(3)
+        ) AS expired
       )
-    RETURNING id
-  `);
-  const staleUnverified = await client.query(`
-    DELETE FROM auth_users
-    WHERE "emailVerified" = false
-      AND "createdAt" < now() - interval '48 hours'
-    RETURNING id
-  `);
-  await client.query(`DELETE FROM auth_sessions WHERE "expiresAt" <= now()`);
-  await client.query(
-    `DELETE FROM auth_verifications WHERE "expiresAt" <= now()`,
+  `,
   );
-  await client.query(`DELETE FROM snct_rate_limits WHERE expires_at <= now()`);
-  await client.query(`
+
+  const [staleUnverified] = await connection.query(
+    `
+    DELETE FROM auth_users
+    WHERE \`emailVerified\` = false
+      AND \`createdAt\` < DATE_SUB(NOW(3), INTERVAL 48 HOUR)
+  `,
+  );
+
+  await connection.query(`DELETE FROM auth_sessions WHERE \`expiresAt\` <= NOW(3)`);
+  await connection.query(
+    `DELETE FROM auth_verifications WHERE \`expiresAt\` <= NOW(3)`,
+  );
+  await connection.query(`DELETE FROM snct_rate_limits WHERE expires_at <= NOW(3)`);
+  await connection.query(`
     DELETE FROM snct_notice_documents
-    WHERE notice_id IS NULL AND created_at < now() - interval '1 hour'
+    WHERE notice_id IS NULL AND created_at < DATE_SUB(NOW(3), INTERVAL 1 HOUR)
   `);
-  await client.query(`
+  await connection.query(`
     DELETE FROM snct_audit_logs
-    WHERE created_at < now() - interval '2 years'
+    WHERE created_at < DATE_SUB(NOW(3), INTERVAL 2 YEAR)
   `);
-  await client.query("COMMIT");
+  await connection.commit();
+
+  const expiredCount =
+    typeof expiredVisitors === "object" &&
+    expiredVisitors &&
+    "affectedRows" in expiredVisitors
+      ? Number(expiredVisitors.affectedRows)
+      : 0;
+  const staleCount =
+    typeof staleUnverified === "object" &&
+    staleUnverified &&
+    "affectedRows" in staleUnverified
+      ? Number(staleUnverified.affectedRows)
+      : 0;
+
   console.log(
-    `Limpeza concluída: ${expiredVisitors.rowCount} visitantes expirados e ${staleUnverified.rowCount} cadastros não verificados removidos.`,
+    `Limpeza concluída: ${expiredCount} visitantes expirados e ${staleCount} cadastros não verificados removidos.`,
   );
 } catch (error) {
-  await client.query("ROLLBACK");
+  await connection.rollback();
   throw error;
 } finally {
-  client.release();
+  connection.release();
   await pool.end();
 }
