@@ -29,7 +29,7 @@ if (process.env.NODE_ENV !== "production") {
   globalForDatabase.snctDatabasePool = db;
 }
 
-export type QueryResultRow = RowDataPacket;
+export type QueryResultRow = Record<string, unknown>;
 export type DbClient = Pool | PoolConnection;
 
 export function assertDatabaseConfigured() {
@@ -49,20 +49,23 @@ export function toMysqlPlaceholders(sql: string) {
     .replace(/\$\d+/g, "?");
 }
 
-async function runQuery<T extends RowDataPacket>(
+async function runQuery<T>(
   target: DbClient,
   text: string,
   values: unknown[] = [],
 ) {
-  const [rows] = await target.query<T[]>(toMysqlPlaceholders(text), values);
-  const list = Array.isArray(rows) ? rows : [];
+  const [rows] = await target.query(
+    toMysqlPlaceholders(text),
+    values as (string | number | boolean | Date | null | Buffer)[],
+  );
+  const list = Array.isArray(rows) ? (rows as RowDataPacket[]) : [];
   return {
     rows: list as T[],
     rowCount: list.length,
   };
 }
 
-export async function query<T extends RowDataPacket = RowDataPacket>(
+export async function query<T = QueryResultRow>(
   text: string,
   values: unknown[] = [],
 ) {
@@ -70,7 +73,7 @@ export async function query<T extends RowDataPacket = RowDataPacket>(
   return runQuery<T>(db, text, values);
 }
 
-export async function clientQuery<T extends RowDataPacket = RowDataPacket>(
+export async function clientQuery<T = QueryResultRow>(
   client: PoolConnection,
   text: string,
   values: unknown[] = [],
@@ -80,11 +83,11 @@ export async function clientQuery<T extends RowDataPacket = RowDataPacket>(
 
 export async function execute(text: string, values: unknown[] = []) {
   assertDatabaseConfigured();
-  const [result] = await db.execute<ResultSetHeader>(
+  const [result] = await db.execute(
     toMysqlPlaceholders(text),
-    values,
+    values as (string | number | boolean | Date | null | Buffer)[],
   );
-  return result;
+  return result as ResultSetHeader;
 }
 
 export async function clientExecute(
@@ -92,11 +95,11 @@ export async function clientExecute(
   text: string,
   values: unknown[] = [],
 ) {
-  const [result] = await client.execute<ResultSetHeader>(
+  const [result] = await client.execute(
     toMysqlPlaceholders(text),
-    values,
+    values as (string | number | boolean | Date | null | Buffer)[],
   );
-  return result;
+  return result as ResultSetHeader;
 }
 
 export async function transaction<T>(
