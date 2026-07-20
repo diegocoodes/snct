@@ -2,7 +2,7 @@ import { readNoticeDocument, readSnctStore } from "@/lib/snct-store";
 
 export async function GET(
   _request: Request,
-  context: RouteContext<"/api/documents/[id]">,
+  context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
   const store = await readSnctStore();
