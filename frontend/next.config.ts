@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiOrigin = process.env.SNCT_API_ORIGIN ?? "http://localhost:4001";
+const apiOrigin = process.env.SNCT_API_ORIGIN ?? "http://localhost:4101";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -43,12 +43,8 @@ const nextConfig: NextConfig = {
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
     ];
-    if (process.env.NODE_ENV === "production") {
-      securityHeaders.push({
-        key: "Strict-Transport-Security",
-        value: "max-age=63072000; includeSubDomains; preload",
-      });
-    }
+    // HSTS is applied per-request in src/proxy.ts only when the request is HTTPS.
+    // Emitting it unconditionally here breaks CSS/JS for plain-HTTP access (IP:port).
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
 };

@@ -1,4 +1,8 @@
-import { auth, ensureBootstrapAdmin } from "@/lib/auth";
+import {
+  buildSessionCookie,
+  ensureBootstrapAdmin,
+  loginWithPassword,
+} from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import {
   assertTrustedMutation,
@@ -32,23 +36,43 @@ export async function POST(request: Request) {
     }
 
     await ensureBootstrapAdmin();
-    const response = await auth.api.signInEmail({
-      body: { email, password },
-      headers: request.headers,
-      asResponse: true,
-    });
+    const result = await loginWithPassword(email, password);
 
     await recordAuditEvent(request, {
       action: "auth.login",
-      entity: "session",
-      outcome: response.ok ? "success" : "failure",
-      metadata: { status: response.status },
+      entity: "sessao",
+      outcome: result.ok ? "success" : "failure",
+      actorId: result.ok ? result.user.id : undefined,
+      actorRole: result.ok ? result.user.role : undefined,
     });
-    return response;
+
+    if (!result.ok) {
+      return Response.json({ error: result.error }, { status: 401 });
+    }
+
+    return Response.json(
+      {
+        user: {
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
+          role: result.user.role,
+        },
+      },
+      {
+        status: 200,
+        headers: {
+          "Set-Cookie": buildSessionCookie(
+            result.session.token,
+            result.session.expiresAt,
+          ),
+        },
+      },
+    );
   } catch (error) {
     await recordAuditEvent(request, {
       action: "auth.login",
-      entity: "session",
+      entity: "sessao",
       outcome:
         error instanceof Response && error.status === 429
           ? "blocked"

@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next dev -p 4000",
+    "dev": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next dev -H 0.0.0.0 -p 4100",
     "build": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next build",
-    "start": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next start -p 4000",
+    "start": "node --import ./scripts/load-backend-env.mjs ./node_modules/next/dist/bin/next start -H 0.0.0.0 -p 4100",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",

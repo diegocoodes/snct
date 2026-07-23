@@ -1,4 +1,4 @@
-import { auth, getSession } from "@/lib/auth";
+import { clearSessionCookie, destroySession, getSession } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import {
   assertTrustedMutation,
@@ -9,20 +9,19 @@ export async function POST(request: Request) {
   try {
     assertTrustedMutation(request);
     const session = await getSession();
-    const response = await auth.api.signOut({
-      headers: request.headers,
-      asResponse: true,
-    });
+    await destroySession(request.headers);
     if (session) {
       await recordAuditEvent(request, {
+        action: "auth.logout",
+        entity: "sessao",
         actorId: session.userId,
         actorRole: session.role,
-        action: "auth.logout",
-        entity: "session",
       });
     }
-    response.headers.set("Clear-Site-Data", '"cache", "storage"');
-    return response;
+    return Response.json(
+      { success: true },
+      { headers: { "Set-Cookie": clearSessionCookie() } },
+    );
   } catch (error) {
     return securityErrorResponse(error);
   }

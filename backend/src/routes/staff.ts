@@ -1,25 +1,16 @@
-import { requireRole, toPublicUser } from "@/lib/auth";
-import { recordAuditEvent } from "@/lib/audit";
+import { requireRole } from "@/lib/auth";
+import {
+  getUsuarioByQrHash,
+  normalizeQrPayload,
+  registrarCheckin,
+} from "@/lib/checkins";
 import {
   assertTrustedMutation,
   enforceRateLimit,
   securityErrorResponse,
 } from "@/lib/request-security";
-import { updateSnctStore } from "@/lib/snct-store";
-import type { StoredUser } from "@/lib/snct-types";
 
-function normalizeQrValue(value: unknown) {
-  if (typeof value !== "string") return "";
-  const trimmed = value.trim().slice(0, 500);
-  if (trimmed.startsWith("SNCT:")) return trimmed.slice(5);
-  try {
-    const url = new URL(trimmed);
-    return url.pathname.split("/").filter(Boolean).at(-1) ?? "";
-  } catch {
-    return trimmed;
-  }
-}
-
+/** Endpoint legado do scanner — usa a tabela checkins. */
 export async function POST(request: Request) {
   try {
     assertTrustedMutation(request);
@@ -39,82 +30,39 @@ export async function POST(request: Request) {
       string,
       unknown
     > | null;
-    const token = normalizeQrValue(body?.token);
-    const action = body?.action === "gift" ? "gift" : "checkin";
+    const token = normalizeQrPayload(body?.token);
     if (!token)
       return Response.json({ error: "QR Code inválido." }, { status: 400 });
 
-    const result = await updateSnctStore<
-      StoredUser | "gift-needs-checkin" | "expired" | "revoked" | null
-    >((store) => {
-      const visitor = store.users.find(
-        (user) => user.role === "visitor" && user.visitorHash === token,
-      );
-      if (!visitor) return null;
-      if (visitor.qrRevokedAt) return "revoked";
-      if (
-        visitor.qrExpiresAt &&
-        new Date(visitor.qrExpiresAt).getTime() <= Date.now()
-      ) {
-        return "expired";
-      }
-      if (action === "gift" && !visitor.checkedInAt)
-        return "gift-needs-checkin";
-      const now = new Date().toISOString();
-      if (action === "checkin" && !visitor.checkedInAt)
-        visitor.checkedInAt = now;
-      if (action === "gift" && !visitor.giftDeliveredAt)
-        visitor.giftDeliveredAt = now;
-      return visitor;
-    });
-
-    if (!result) {
-      await recordAuditEvent(request, {
-        actorId: session.userId,
-        actorRole: session.role,
-        action: `credential.${action}`,
-        entity: "credential",
-        outcome: "failure",
-      });
+    const found = await getUsuarioByQrHash(token);
+    if (!found) {
       return Response.json(
-        { error: "Visitante não encontrado." },
+        { error: "Participante não encontrado." },
         { status: 404 },
       );
     }
-    if (result === "gift-needs-checkin") {
-      return Response.json(
-        { error: "Faça o check-in antes de entregar o brinde." },
-        { status: 409 },
-      );
-    }
-    if (result === "expired" || result === "revoked") {
-      await recordAuditEvent(request, {
-        actorId: session.userId,
-        actorRole: session.role,
-        action: `credential.${action}`,
-        entity: "credential",
-        outcome: "blocked",
-        metadata: { reason: result },
-      });
+
+    const result = await registrarCheckin({
+      usuarioId: found.id,
+      metodo: "QRCODE",
+      realizadoPorUsuarioId: session.userId,
+      actorRole: session.role,
+      request,
+    });
+    if (!result.ok) {
       return Response.json(
         {
-          error:
-            result === "expired"
-              ? "Credencial expirada."
-              : "Credencial revogada.",
+          error: result.error,
+          usuario: "usuario" in result ? result.usuario : found,
         },
-        { status: 410 },
+        { status: result.status },
       );
     }
-
-    await recordAuditEvent(request, {
-      actorId: session.userId,
-      actorRole: session.role,
-      action: `credential.${action}`,
-      entity: "visitor",
-      entityId: result.id,
+    return Response.json({
+      visitor: result.usuario,
+      usuario: result.usuario,
+      action: "checkin",
     });
-    return Response.json({ visitor: toPublicUser(result), action });
   } catch (error) {
     return securityErrorResponse(error);
   }

@@ -8,13 +8,13 @@ import { NewsCarousel } from "@/components/event/news-carousel";
 import { PartnersMarquee } from "@/components/event/partners-marquee";
 import { Button } from "@/components/ui/button";
 import { getPaulistaNews } from "@/lib/paulista-news";
-import { readSnctStore } from "@/lib/snct-store";
+import { readPublicSnctStore } from "@/lib/snct-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const [store, newsItems] = await Promise.all([
-    readSnctStore(),
+    readPublicSnctStore(),
     getPaulistaNews(),
   ]);
 

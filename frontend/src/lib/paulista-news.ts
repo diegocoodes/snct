@@ -84,9 +84,9 @@ function isOfficialUrl(value?: string) {
 export async function getPaulistaNews(): Promise<NewsItem[]> {
   try {
     const response = await fetch(PAULISTA_NEWS_API, {
-      cache: "no-store",
+      next: { revalidate: 300 },
       headers: { "User-Agent": "SNCT-Paulista/1.0" },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(5_000),
     });
 
     if (!response.ok) return [];

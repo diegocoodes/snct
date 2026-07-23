@@ -6,13 +6,13 @@ import { InternalPageHero } from "@/components/event/internal-page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/state-panel";
-import { readSnctStore } from "@/lib/snct-store";
+import { readPublicSnctStore } from "@/lib/snct-store";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function NoticesPage() {
-  const store = await readSnctStore();
+  const store = await readPublicSnctStore();
 
   return (
     <>

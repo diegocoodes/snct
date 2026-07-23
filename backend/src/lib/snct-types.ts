@@ -1,14 +1,41 @@
-export type UserRole = "visitor" | "staff" | "admin";
+export type UserRole =
+  | "admin"
+  | "staff"
+  | "avaliador"
+  | "professor"
+  | "visitante"
+  | "aluno";
+
+export type RoleCodigo =
+  | "ADMINISTRADOR"
+  | "STAFF"
+  | "AVALIADOR"
+  | "PROFESSOR"
+  | "VISITANTE"
+  | "ALUNO";
+
+export type CheckinMetodo = "QRCODE" | "NOME" | "EMAIL" | "CPF" | "MANUAL";
 
 export type StoredUser = {
   id: string;
   name: string;
   email: string;
-  age?: number;
   role: UserRole;
+  roleId: number;
+  roleCodigo: RoleCodigo;
+  roleNome?: string;
+  telefone?: string;
+  cpf?: string;
+  dataNascimento?: string;
+  foto?: string;
+  aceitouDireitoImagem?: boolean;
+  dataAceiteDireitoImagem?: string;
+  qrCodeHash?: string;
+  visitorHash?: string;
+  ativo?: boolean;
+  age?: number;
   emailVerified?: boolean;
   twoFactorEnabled?: boolean;
-  visitorHash?: string;
   createdAt: string;
   checkedInAt?: string;
   giftDeliveredAt?: string;
@@ -17,9 +44,35 @@ export type StoredUser = {
   guardianConsentAt?: string;
   qrExpiresAt?: string;
   qrRevokedAt?: string;
+  checkinHoje?: boolean;
 };
 
 export type PublicUser = StoredUser;
+
+export type StaffUserView = {
+  id: string;
+  nomeCompleto: string;
+  email: string;
+  telefoneMascarado: string;
+  cpfMascarado: string;
+  foto?: string;
+  role: UserRole;
+  roleCodigo: RoleCodigo;
+  roleNome: string;
+  ativo: boolean;
+  checkinHoje: boolean;
+  historicoCheckins: CheckinRecord[];
+};
+
+export type CheckinRecord = {
+  id: string;
+  usuarioId: string;
+  dataCheckin: string;
+  horarioCheckin: string;
+  realizadoPorUsuarioId: string;
+  metodo: CheckinMetodo;
+  createdAt: string;
+};
 
 export type ManagedEvent = {
   id: string;
@@ -83,5 +136,19 @@ export type AuditLog = {
   entityId: string | null;
   outcome: "success" | "failure" | "blocked";
   metadata: Record<string, unknown>;
+  dadosAnteriores?: Record<string, unknown> | null;
+  dadosNovos?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type RoleChangeRecord = {
+  id: number;
+  usuarioId: string;
+  roleAnteriorId: number | null;
+  roleNovaId: number;
+  roleAnteriorCodigo?: RoleCodigo | null;
+  roleNovaCodigo?: RoleCodigo;
+  alteradoPorUsuarioId: string | null;
+  motivo?: string | null;
   createdAt: string;
 };

@@ -77,7 +77,7 @@ export async function enforceRateLimit(options: {
 
   const result = await query<{ request_count: number; retry_after: number }>(
     `
-      INSERT INTO snct_rate_limits
+      INSERT INTO rate_limits
         (rate_key, request_count, window_started_at, expires_at)
       VALUES (?, 1, NOW(3), DATE_ADD(NOW(3), INTERVAL ? SECOND))
       ON DUPLICATE KEY UPDATE
@@ -96,7 +96,7 @@ export async function enforceRateLimit(options: {
     `
       SELECT request_count,
              GREATEST(1, CEIL(TIMESTAMPDIFF(SECOND, NOW(3), expires_at))) AS retry_after
-      FROM snct_rate_limits
+      FROM rate_limits
       WHERE rate_key = ?
     `,
     [key],

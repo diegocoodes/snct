@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { InputMask } from "@/components/ui/input-mask";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
@@ -37,6 +38,7 @@ import type {
   PublicUser,
   SiteSettings,
 } from "@/lib/snct-types";
+import { ROLE_LABELS } from "@/lib/roles-constants";
 import { secureFetch } from "@/lib/secure-fetch";
 
 type AdminDashboardProps = {
@@ -103,7 +105,13 @@ function AdminDashboard({
     return response.ok;
   }
 
-  const visitors = users.filter((user) => user.role === "visitor");
+  const visitors = users.filter(
+    (user) =>
+      user.role === "visitante" ||
+      user.role === "aluno" ||
+      user.role === "avaliador" ||
+      user.role === "professor",
+  );
   const staff = users.filter((user) => user.role === "staff");
   const checkins = visitors.filter((user) => user.checkedInAt).length;
   const gifts = visitors.filter((user) => user.giftDeliveredAt).length;
@@ -289,6 +297,26 @@ function AdminDashboard({
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
+                      <Label htmlFor="new-user-cpf">CPF</Label>
+                      <InputMask
+                        id="new-user-cpf"
+                        name="cpf"
+                        mask="cpf"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="new-user-telefone">Telefone</Label>
+                      <InputMask
+                        id="new-user-telefone"
+                        name="telefone"
+                        mask="phone"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
                       <Label htmlFor="new-user-role">Perfil</Label>
                       <select
                         id="new-user-role"
@@ -297,17 +325,20 @@ function AdminDashboard({
                         className="h-11 w-full rounded-xl border border-input bg-[#111329] px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
                       >
                         <option value="staff">Staff</option>
-                        <option value="visitor">Visitante</option>
+                        <option value="admin">Administrador</option>
+                        <option value="visitante">Visitante</option>
+                        <option value="aluno">Aluno</option>
+                        <option value="avaliador">Avaliador</option>
+                        <option value="professor">Professor</option>
                       </select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="new-user-age">Idade (visitante)</Label>
+                      <Label htmlFor="new-user-birth">Data de nascimento</Label>
                       <Input
-                        id="new-user-age"
-                        name="age"
-                        type="number"
-                        min={5}
-                        max={120}
+                        id="new-user-birth"
+                        name="dataNascimento"
+                        type="date"
+                        required
                       />
                     </div>
                   </div>
@@ -321,6 +352,10 @@ function AdminDashboard({
                       maxLength={128}
                       required
                     />
+                    <p className="text-xs text-blue-gray">
+                      Mínimo 12 caracteres, com maiúscula, minúscula, número e
+                      símbolo.
+                    </p>
                   </div>
                   <Button
                     type="submit"
@@ -355,12 +390,12 @@ function AdminDashboard({
                             <Badge
                               variant="outline"
                               className={
-                                user.role === "staff"
+                                user.role === "staff" || user.role === "admin"
                                   ? "border-purple-vibrant/30 bg-purple-vibrant/10 text-[#BDA5FF]"
                                   : "border-cyan-electric/30 bg-cyan-electric/10 text-cyan-electric"
                               }
                             >
-                              {user.role === "staff" ? "Staff" : "Visitante"}
+                              {ROLE_LABELS[user.role] ?? user.role}
                             </Badge>
                             {user.checkedInAt ? (
                               <Badge className="bg-emerald-500/15 text-emerald-300">

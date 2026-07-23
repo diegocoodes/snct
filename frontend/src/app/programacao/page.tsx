@@ -5,12 +5,12 @@ import { EventHeader } from "@/components/event/event-header";
 import { InternalPageHero } from "@/components/event/internal-page-hero";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/state-panel";
-import { readSnctStore } from "@/lib/snct-store";
+import { readPublicSnctStore } from "@/lib/snct-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function SchedulePage() {
-  const store = await readSnctStore();
+  const store = await readPublicSnctStore();
 
   return (
     <>

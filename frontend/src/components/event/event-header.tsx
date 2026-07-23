@@ -99,10 +99,16 @@ function EventHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <Button
+            variant="glow"
+            render={<Link href="/credencial" />}
+          >
+            Credencial
+          </Button>
           <Button variant="ghost" render={<Link href="/login" />}>
             <LogIn aria-hidden /> Entrar
           </Button>
-          <Button render={<Link href="/cadastro" />}>Inscreva-se</Button>
+          <Button render={<Link href="/auth/inscricao" />}>Inscreva-se</Button>
         </div>
 
         <Sheet>
@@ -200,7 +206,17 @@ function EventHeader() {
               <SheetClose
                 render={
                   <Link
-                    href="/cadastro"
+                    href="/credencial"
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-cyan-electric/30 bg-cyan-electric/10 px-4 text-sm font-semibold text-cyan-electric shadow-[0_0_24px_rgb(0_229_255/12%)] hover:bg-cyan-electric/18 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-electric"
+                  />
+                }
+              >
+                Credencial
+              </SheetClose>
+              <SheetClose
+                render={
+                  <Link
+                    href="/auth/inscricao"
                     className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-vibrant to-[#8B20FF] px-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgb(106_0_255/28%)] transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-electric motion-reduce:transition-none"
                   />
                 }

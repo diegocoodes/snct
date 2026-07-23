@@ -1,14 +1,19 @@
 import { randomUUID } from "node:crypto";
 
-import { auth, createVisitorHash, requireRole } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { readAuditEvents, recordAuditEvent } from "@/lib/audit";
+import { onlyDigits, isValidCpf } from "@/lib/cpf";
 import { query } from "@/lib/db";
-import { isStrongPassword } from "@/lib/password";
+import { hashPassword, isStrongPassword } from "@/lib/password";
 import {
   assertTrustedMutation,
   enforceRateLimit,
   securityErrorResponse,
 } from "@/lib/request-security";
+import {
+  getRoleByCodigo,
+  listRoles,
+} from "@/lib/roles";
 import {
   deleteNoticeDocumentFile,
   readSnctStore,
@@ -20,7 +25,14 @@ import type {
   ManagedNotice,
   ManagedNoticeDocument,
   ManagedPartner,
+  RoleCodigo,
 } from "@/lib/snct-types";
+import {
+  changeUserRole,
+  createQrCodeHash,
+  listRoleChanges,
+  setUserActive,
+} from "@/lib/usuarios";
 
 function clean(value: unknown, maximumLength = 300) {
   return typeof value === "string" ? value.trim().slice(0, maximumLength) : "";
@@ -63,16 +75,41 @@ async function authorizeMutation(request: Request) {
   return session;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await requireRole("admin");
   if (!session) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
-  const [store, auditLogs] = await Promise.all([
+  const url = new URL(request.url);
+  const usuarioId = url.searchParams.get("usuarioId");
+  if (usuarioId) {
+    const [store, roleHistory, roles] = await Promise.all([
+      readSnctStore(),
+      listRoleChanges(usuarioId),
+      listRoles(),
+    ]);
+    const user = store.users.find((item) => item.id === usuarioId);
+    if (!user) {
+      return Response.json({ error: "Usuário não encontrado." }, { status: 404 });
+    }
+    return Response.json({ user, roleHistory, roles });
+  }
+
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const [store, auditLogs, roles] = await Promise.all([
     readSnctStore(),
     readAuditEvents(100),
+    listRoles(),
   ]);
-  return Response.json({ ...store, auditLogs });
+  const users = q
+    ? store.users.filter(
+        (user) =>
+          user.name.toLowerCase().includes(q) ||
+          user.email.toLowerCase().includes(q) ||
+          (user.cpf ?? "").includes(onlyDigits(q)),
+      )
+    : store.users;
+  return Response.json({ ...store, users, auditLogs, roles });
 }
 
 export async function POST(request: Request) {
@@ -157,26 +194,55 @@ export async function PATCH(request: Request) {
       const name = clean(body?.name, 160);
       const email = clean(body?.email, 254).toLowerCase();
       const password = typeof body?.password === "string" ? body.password : "";
-      const role = body?.role === "staff" ? "staff" : "visitor";
-      const age = body?.age ? Number(body.age) : undefined;
+      const requestedRaw =
+        typeof body?.roleCodigo === "string"
+          ? body.roleCodigo
+          : typeof body?.role === "string"
+            ? body.role
+            : "VISITANTE";
+      const roleFromAuth: Record<string, RoleCodigo> = {
+        admin: "ADMINISTRADOR",
+        staff: "STAFF",
+        avaliador: "AVALIADOR",
+        professor: "PROFESSOR",
+        visitante: "VISITANTE",
+        aluno: "ALUNO",
+        visitor: "VISITANTE",
+        ADMINISTRADOR: "ADMINISTRADOR",
+        STAFF: "STAFF",
+        AVALIADOR: "AVALIADOR",
+        PROFESSOR: "PROFESSOR",
+        VISITANTE: "VISITANTE",
+        ALUNO: "ALUNO",
+      };
+      const roleCodigo = roleFromAuth[requestedRaw] ?? "VISITANTE";
+      const telefone = onlyDigits(String(body?.telefone ?? "81999999999"));
+      const cpf = onlyDigits(String(body?.cpf ?? ""));
+      const dataNascimento =
+        clean(body?.dataNascimento, 10) || "1990-01-01";
+
+      const roleRow = await getRoleByCodigo(roleCodigo);
+      if (!roleRow) {
+        return Response.json({ error: "Função inválida." }, { status: 400 });
+      }
 
       if (
         name.length < 2 ||
         !isEmail(email) ||
         !isStrongPassword(password) ||
-        (role === "visitor" &&
-          (!Number.isInteger(age) || (age ?? 0) < 5 || (age ?? 0) > 120))
+        !cpf ||
+        !isValidCpf(cpf)
       ) {
         return Response.json(
           {
-            error: "Informe dados válidos e uma senha forte com 12 caracteres.",
+            error: "Informe nome, e-mail, CPF válido e senha forte.",
           },
           { status: 400 },
         );
       }
 
-      const existing = await query<{ id: string }>(
-        "SELECT id FROM auth_users WHERE lower(email) = $1 LIMIT 1",
+      const existing = await query<{ id: number }>(
+        "SELECT id FROM usuarios WHERE lower(email) = $1 LIMIT 1",
         [email],
       );
       if (existing.rows[0]) {
@@ -185,53 +251,108 @@ export async function PATCH(request: Request) {
           { status: 409 },
         );
       }
-
-      const created = await auth.api.signUpEmail({
-        body: { name, email, password },
-      });
-      if (!created.user?.id) {
-        return Response.json(
-          { error: "Não foi possível criar o usuário." },
-          { status: 400 },
-        );
-      }
-      await query(
-        "UPDATE auth_users SET role = $2, `emailVerified` = true, `updatedAt` = NOW(3) WHERE id = $1",
-        [created.user.id, role],
+      const existingCpf = await query<{ id: number }>(
+        "SELECT id FROM usuarios WHERE cpf = $1 LIMIT 1",
+        [cpf],
       );
-      if (role === "visitor") {
-        await query(
-          `INSERT INTO snct_profiles
-            (user_id, age, visitor_hash, privacy_accepted_at, privacy_version,
-             guardian_consent_at, qr_expires_at)
-           VALUES ($1, $2, $3, NOW(3), $4, $5, DATE_ADD(NOW(3), INTERVAL 1 YEAR))`,
-          [
-            created.user.id,
-            age,
-            createVisitorHash(),
-            process.env.SNCT_PRIVACY_VERSION ?? "2026-07-20",
-            age! < 18 ? new Date() : null,
-          ],
+      if (existingCpf.rows[0]) {
+        return Response.json(
+          { error: "Este CPF já está em uso." },
+          { status: 409 },
         );
       }
+
+      const qrCodeHash = createQrCodeHash();
+      const senhaHash = await hashPassword(password);
+      await query(
+        `INSERT INTO usuarios
+          (role_id, nome_completo, email, telefone, cpf, senha_hash,
+           data_nascimento, aceitou_direito_imagem, data_aceite_direito_imagem,
+           qr_code_hash, ativo)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(3), $8, TRUE)`,
+        [
+          roleRow.id,
+          name,
+          email,
+          telefone,
+          cpf,
+          senhaHash,
+          dataNascimento,
+          qrCodeHash,
+        ],
+      );
+      const created = await query<{ id: number }>(
+        "SELECT id FROM usuarios WHERE email = $1 LIMIT 1",
+        [email],
+      );
+      const userId = String(created.rows[0]?.id ?? "");
       const user = (await readSnctStore()).users.find(
-        (candidate) => candidate.id === created.user.id,
+        (candidate) => candidate.id === userId,
       );
       await recordAuditEvent(request, {
         actorId: session.userId,
         actorRole: session.role,
-        action: "user.create",
-        entity: "user",
-        entityId: created.user.id,
-        metadata: { role },
+        action:
+          roleCodigo === "ADMINISTRADOR"
+            ? "user.create_admin"
+            : roleCodigo === "STAFF"
+              ? "user.create_staff"
+              : "user.create",
+        entity: "usuario",
+        entityId: userId,
+        metadata: { role: roleCodigo },
       });
       return Response.json({ user });
     }
 
+    if (action === "changeRole") {
+      const userId = clean(body?.userId, 100);
+      const roleCodigo = clean(body?.roleCodigo, 32) as RoleCodigo;
+      const motivo = clean(body?.motivo, 255);
+      try {
+        const result = await changeUserRole({
+          usuarioId: userId,
+          novaRoleCodigo: roleCodigo,
+          alteradoPorUsuarioId: session.userId,
+          motivo,
+          request,
+        });
+        const user = (await readSnctStore()).users.find((item) => item.id === userId);
+        return Response.json({ user, ...result });
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Falha ao alterar função." },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (action === "setActive") {
+      const userId = clean(body?.userId, 100);
+      const ativo = body?.ativo === true;
+      try {
+        await setUserActive({
+          usuarioId: userId,
+          ativo,
+          alteradoPorUsuarioId: session.userId,
+          request,
+        });
+        const user = (await readSnctStore()).users.find((item) => item.id === userId);
+        return Response.json({ user });
+      } catch (error) {
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Falha ao atualizar status." },
+          { status: 400 },
+        );
+      }
+    }
+
     if (action === "deleteUser") {
       const userId = clean(body?.userId, 100);
-      const existing = await query<{ id: string }>(
-        "SELECT id FROM auth_users WHERE id = $1 AND role <> 'admin'",
+      const existing = await query<{ id: number }>(
+        `SELECT u.id FROM usuarios u
+         INNER JOIN roles r ON r.id = u.role_id
+         WHERE u.id = $1 AND r.codigo <> 'ADMINISTRADOR'`,
         [userId],
       );
       if (!existing.rows[0]) {
@@ -240,14 +361,12 @@ export async function PATCH(request: Request) {
           { status: 404 },
         );
       }
-      await query("DELETE FROM auth_users WHERE id = $1 AND role <> 'admin'", [
-        userId,
-      ]);
+      await query("DELETE FROM usuarios WHERE id = $1", [userId]);
       await recordAuditEvent(request, {
         actorId: session.userId,
         actorRole: session.role,
         action: "user.delete",
-        entity: "user",
+        entity: "usuario",
         entityId: userId,
       });
       return Response.json({ success: true });

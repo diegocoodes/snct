@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 
-function contentSecurityPolicy(nonce: string) {
+function isHttpsRequest(request: NextRequest) {
+  const forwarded = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  if (forwarded) return forwarded.toLowerCase() === "https";
+  return request.nextUrl.protocol === "https:";
+}
+
+function contentSecurityPolicy(nonce: string, https: boolean) {
   const additionalImageSources =
     process.env.SNCT_ALLOWED_IMAGE_HOSTS?.split(",")
       .map((host) => host.trim().toLowerCase())
@@ -24,14 +30,19 @@ function contentSecurityPolicy(nonce: string) {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    process.env.NODE_ENV === "production" ? "upgrade-insecure-requests" : "",
+    // Only force HTTPS upgrades when the page itself is already HTTPS.
+    // On plain HTTP (IP:port / lab), this directive blocks CSS/JS/fonts.
+    https && process.env.NODE_ENV === "production"
+      ? "upgrade-insecure-requests"
+      : "",
   ];
   return directives.filter(Boolean).join("; ");
 }
 
 export function proxy(request: NextRequest) {
   const nonce = randomBytes(16).toString("base64");
-  const csp = contentSecurityPolicy(nonce);
+  const https = isHttpsRequest(request);
+  const csp = contentSecurityPolicy(nonce, https);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
@@ -47,7 +58,8 @@ export function proxy(request: NextRequest) {
   );
   response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  if (process.env.NODE_ENV === "production") {
+  // HSTS on HTTP locks the browser into HTTPS forever for this host — skip until TLS.
+  if (process.env.NODE_ENV === "production" && https) {
     response.headers.set(
       "Strict-Transport-Security",
       "max-age=63072000; includeSubDomains; preload",

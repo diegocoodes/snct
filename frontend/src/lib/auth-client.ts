@@ -1,8 +1,8 @@
 "use client";
 
-import { createAuthClient } from "better-auth/react";
-import { twoFactorClient } from "better-auth/client/plugins";
-
-export const authClient = createAuthClient({
-  plugins: [twoFactorClient()],
-});
+export const authClient = {
+  twoFactor: {
+    getTotpUri: async () => ({ data: null, error: { message: "MFA não habilitado neste fluxo." } }),
+    verifyTotp: async () => ({ data: null, error: { message: "MFA não habilitado neste fluxo." } }),
+  },
+};

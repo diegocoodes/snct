@@ -1,24 +1,48 @@
-import Image from "next/image";
 import Link from "next/link";
-import { LayoutDashboard } from "lucide-react";
+import Image from "next/image";
+import { LayoutDashboard, QrCode, School } from "lucide-react";
 
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { Badge } from "@/components/ui/badge";
 import type { SessionData } from "@/lib/snct-types";
+import { cn } from "@/lib/utils";
 
 const roleLabels = {
-  visitor: "Visitante",
-  staff: "Staff",
   admin: "Administrador",
+  staff: "Staff",
+  avaliador: "Avaliador",
+  professor: "Professor",
+  visitante: "Visitante",
+  aluno: "Aluno",
 } as const;
 
 function DashboardShell({
   session,
+  activeNav,
   children,
 }: {
   session: SessionData;
+  activeNav?: "credencial" | "escola";
   children: React.ReactNode;
 }) {
+  const professorNav =
+    session.role === "professor"
+      ? [
+          {
+            href: "/perfil",
+            label: "Meu check-in",
+            icon: QrCode,
+            key: "credencial" as const,
+          },
+          {
+            href: "/perfil/escola",
+            label: "Escola e alunos",
+            icon: School,
+            key: "escola" as const,
+          },
+        ]
+      : null;
+
   return (
     <div className="relative min-h-svh overflow-hidden bg-purple-deep">
       <div
@@ -70,9 +94,36 @@ function DashboardShell({
             <LogoutButton />
           </div>
         </div>
+
+        {professorNav ? (
+          <nav
+            aria-label="Menu do professor"
+            className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-5 pb-3 sm:px-8"
+          >
+            {professorNav.map((item) => {
+              const Icon = item.icon;
+              const active = activeNav === item.key;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm transition",
+                    active
+                      ? "bg-cyan-electric/15 text-cyan-electric ring-1 ring-cyan-electric/40"
+                      : "text-blue-gray hover:bg-white/[0.05] hover:text-ice-white",
+                  )}
+                >
+                  <Icon className="size-4" aria-hidden />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        ) : null}
       </header>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-5 py-10 sm:px-8 sm:py-14">
+      <main className="relative z-10 mx-auto max-w-7xl px-4 py-5 sm:px-8 sm:py-10">
         {children}
       </main>
     </div>

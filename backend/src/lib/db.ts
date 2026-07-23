@@ -25,9 +25,7 @@ function createDatabasePool() {
 
 export const db = globalForDatabase.snctDatabasePool ?? createDatabasePool();
 
-if (process.env.NODE_ENV !== "production") {
-  globalForDatabase.snctDatabasePool = db;
-}
+globalForDatabase.snctDatabasePool = db;
 
 export type QueryResultRow = Record<string, unknown>;
 export type DbClient = Pool | PoolConnection;
@@ -40,13 +38,21 @@ export function assertDatabaseConfigured() {
   }
 }
 
-export function toMysqlPlaceholders(sql: string) {
-  return sql
+export function toMysqlPlaceholders(sql: string, values: unknown[] = []) {
+  const withoutCasts = sql
     .replace(/::jsonb/gi, "")
     .replace(/::text\[\]/gi, "")
     .replace(/::text/gi, "")
-    .replace(/::int/gi, "")
-    .replace(/\$\d+/g, "?");
+    .replace(/::int/gi, "");
+
+  const orderedValues: unknown[] = [];
+  const converted = withoutCasts.replace(/\$(\d+)/g, (_match, group: string) => {
+    const index = Number(group) - 1;
+    orderedValues.push(values[index]);
+    return "?";
+  });
+
+  return { sql: converted, values: orderedValues.length ? orderedValues : values };
 }
 
 async function runQuery<T>(
@@ -54,9 +60,10 @@ async function runQuery<T>(
   text: string,
   values: unknown[] = [],
 ) {
+  const prepared = toMysqlPlaceholders(text, values);
   const [rows] = await target.query(
-    toMysqlPlaceholders(text),
-    values as (string | number | boolean | Date | null | Buffer)[],
+    prepared.sql,
+    prepared.values as (string | number | boolean | Date | null | Buffer)[],
   );
   const list = Array.isArray(rows) ? (rows as RowDataPacket[]) : [];
   return {
@@ -83,9 +90,10 @@ export async function clientQuery<T = QueryResultRow>(
 
 export async function execute(text: string, values: unknown[] = []) {
   assertDatabaseConfigured();
+  const prepared = toMysqlPlaceholders(text, values);
   const [result] = await db.execute(
-    toMysqlPlaceholders(text),
-    values as (string | number | boolean | Date | null | Buffer)[],
+    prepared.sql,
+    prepared.values as (string | number | boolean | Date | null | Buffer)[],
   );
   return result as ResultSetHeader;
 }
@@ -95,9 +103,10 @@ export async function clientExecute(
   text: string,
   values: unknown[] = [],
 ) {
+  const prepared = toMysqlPlaceholders(text, values);
   const [result] = await client.execute(
-    toMysqlPlaceholders(text),
-    values as (string | number | boolean | Date | null | Buffer)[],
+    prepared.sql,
+    prepared.values as (string | number | boolean | Date | null | Buffer)[],
   );
   return result as ResultSetHeader;
 }

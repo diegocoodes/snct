@@ -41,7 +41,7 @@ export async function sendFetchResponse(
 }
 
 export function absoluteUrl(req: IncomingMessage, pathWithQuery: string) {
-  const host = req.headers.host ?? "localhost:4001";
+  const host = req.headers.host ?? "localhost:4101";
   const protoHeader = req.headers["x-forwarded-proto"];
   const proto =
     typeof protoHeader === "string" && protoHeader.length > 0

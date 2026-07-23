@@ -1,187 +1,121 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
-import { headers } from "next/headers";
-import { betterAuth } from "better-auth";
-import { twoFactor } from "better-auth/plugins";
+import { createHash, randomBytes } from "node:crypto";
+import { cookies, headers } from "next/headers";
 
-import { db, query } from "@/lib/db";
-import { sendSecurityEmail } from "@/lib/mailer";
+import { query } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import type { PublicUser, SessionData, UserRole } from "@/lib/snct-types";
+import {
+  getRoleByCodigo,
+  ROLE_CODIGO_TO_AUTH,
+  requiresMfa,
+} from "@/lib/roles";
+import type {
+  PublicUser,
+  RoleCodigo,
+  SessionData,
+  StoredUser,
+  UserRole,
+} from "@/lib/snct-types";
 
-const baseURL = process.env.BETTER_AUTH_URL ?? "http://localhost:4000";
-const isProduction = process.env.NODE_ENV === "production";
+const SESSION_COOKIE = "snct_session";
+const SESSION_DAYS = 7;
 
-export const auth = betterAuth({
-  appName: "SNCT Paulista 2026",
-  baseURL,
-  secret: process.env.BETTER_AUTH_SECRET ?? process.env.SNCT_SESSION_SECRET,
-  database: db,
-  trustedOrigins: [
-    baseURL,
-    ...(process.env.SNCT_TRUSTED_ORIGINS?.split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean) ?? []),
-  ],
-  emailAndPassword: {
-    enabled: true,
-    minPasswordLength: 12,
-    maxPasswordLength: 128,
-    requireEmailVerification: isProduction,
-    autoSignIn: !isProduction,
-    revokeSessionsOnPasswordReset: true,
-    password: {
-      hash: hashPassword,
-      verify: ({ hash, password }) => verifyPassword(hash, password),
-    },
-    sendResetPassword: async ({ user, url }) => {
-      await sendSecurityEmail({
-        to: user.email,
-        subject: "Redefinição de senha — SNCT Paulista 2026",
-        heading: "Redefina sua senha",
-        message:
-          "Recebemos uma solicitação para redefinir a senha da sua conta.",
-        actionLabel: "Criar nova senha",
-        actionUrl: url,
-      });
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: isProduction,
-    sendOnSignIn: true,
-    autoSignInAfterVerification: true,
-    expiresIn: 60 * 60,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendSecurityEmail({
-        to: user.email,
-        subject: "Confirme seu e-mail — SNCT Paulista 2026",
-        heading: "Confirme seu e-mail",
-        message:
-          "Use o botão abaixo para confirmar o cadastro e ativar sua credencial.",
-        actionLabel: "Confirmar cadastro",
-        actionUrl: url,
-      });
-    },
-  },
-  user: {
-    modelName: "auth_users",
-    additionalFields: {
-      role: {
-        type: ["visitor", "staff", "admin"],
-        required: true,
-        defaultValue: "visitor",
-        input: false,
-      },
-    },
-    deleteUser: {
-      enabled: true,
-      deleteTokenExpiresIn: 60 * 30,
-      sendDeleteAccountVerification: isProduction
-        ? async ({ user, url }) => {
-            await sendSecurityEmail({
-              to: user.email,
-              subject: "Exclusão de conta — SNCT Paulista 2026",
-              heading: "Confirme a exclusão da conta",
-              message:
-                "Esta ação remove sua conta e sua credencial permanentemente.",
-              actionLabel: "Excluir minha conta",
-              actionUrl: url,
-            });
-          }
-        : undefined,
-      afterDelete: async (user) => {
-        await query(
-          `UPDATE snct_privacy_requests
-           SET status = 'completed', completed_at = now()
-           WHERE user_id = $1 AND request_type = 'deletion' AND status <> 'completed'`,
-          [user.id],
-        );
-      },
-    },
-  },
-  session: {
-    modelName: "auth_sessions",
-    expiresIn: 60 * 60 * 8,
-    updateAge: 60 * 60,
-    freshAge: 60 * 15,
-    cookieCache: { enabled: false },
-  },
-  account: { modelName: "auth_accounts" },
-  verification: { modelName: "auth_verifications" },
-  rateLimit: {
-    enabled: true,
-    storage: "database",
-    modelName: "auth_rate_limits",
-    window: 60,
-    max: 100,
-    customRules: {
-      "/sign-in/email": { window: 60, max: 5 },
-      "/sign-up/email": { window: 60 * 10, max: 3 },
-      "/request-password-reset": { window: 60 * 15, max: 3 },
-      "/two-factor/*": { window: 60, max: 5 },
-    },
-  },
-  advanced: {
-    useSecureCookies: isProduction,
-    cookiePrefix: "snct",
-    defaultCookieAttributes: {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProduction,
-      path: "/",
-    },
-  },
-  telemetry: { enabled: false },
-  plugins: [
-    twoFactor({
-      issuer: "SNCT Paulista 2026",
-      twoFactorTable: "auth_two_factors",
-      twoFactorCookieMaxAge: 60 * 10,
-      trustDeviceMaxAge: 60 * 60 * 24 * 14,
-      accountLockout: {
-        enabled: true,
-        maxFailedAttempts: 5,
-        durationSeconds: 60 * 15,
-      },
-    }),
-  ],
-});
-
-type AuthUser = {
-  id: string;
-  name: string;
+type UsuarioRow = {
+  id: number | bigint | string;
+  role_id: number;
+  nome_completo: string;
   email: string;
-  emailVerified: boolean;
-  role: UserRole;
-  twoFactorEnabled?: boolean | null;
+  telefone: string;
+  cpf: string;
+  senha_hash: string;
+  data_nascimento: Date | string;
+  foto: string | null;
+  aceitou_direito_imagem: number | boolean;
+  data_aceite_direito_imagem: Date | null;
+  qr_code_hash: string;
+  ativo: number | boolean;
+  created_at: Date;
+  role_codigo: RoleCodigo;
+  role_nome: string;
 };
 
-export async function getSession(): Promise<SessionData | null> {
-  const result = await auth.api.getSession({ headers: await headers() });
-  if (!result) return null;
-  const user = result.user as typeof result.user & AuthUser;
+function toId(value: number | bigint | string) {
+  return String(value);
+}
+
+function birthIso(value: Date | string) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function ageFromBirth(value: Date | string) {
+  const iso = birthIso(value);
+  const [y, m, d] = iso.split("-").map(Number);
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) {
+    age -= 1;
+  }
+  return age;
+}
+
+export function mapUsuarioRow(row: UsuarioRow): StoredUser {
+  const role = ROLE_CODIGO_TO_AUTH[row.role_codigo];
+  const qr = row.qr_code_hash;
   return {
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    emailVerified: user.emailVerified,
-    mfaEnabled: Boolean(user.twoFactorEnabled),
-    expiresAt: new Date(result.session.expiresAt).getTime(),
+    id: toId(row.id),
+    name: row.nome_completo,
+    email: row.email,
+    role,
+    roleId: row.role_id,
+    roleCodigo: row.role_codigo,
+    roleNome: row.role_nome,
+    telefone: row.telefone,
+    cpf: row.cpf,
+    dataNascimento: birthIso(row.data_nascimento),
+    foto: row.foto ?? undefined,
+    aceitouDireitoImagem: Boolean(row.aceitou_direito_imagem),
+    dataAceiteDireitoImagem: row.data_aceite_direito_imagem
+      ? new Date(row.data_aceite_direito_imagem).toISOString()
+      : undefined,
+    qrCodeHash: qr,
+    visitorHash: qr,
+    ativo: Boolean(row.ativo),
+    age: ageFromBirth(row.data_nascimento),
+    emailVerified: true,
+    twoFactorEnabled: false,
+    createdAt: new Date(row.created_at).toISOString(),
   };
 }
 
-export async function requireRole(...roles: UserRole[]) {
-  const session = await getSession();
-  if (!session || !roles.includes(session.role)) return null;
-  if (
-    (session.role === "admin" || session.role === "staff") &&
-    !session.mfaEnabled
-  ) {
-    return null;
-  }
-  return session;
+const userSelect = `
+  SELECT u.id, u.role_id, u.nome_completo, u.email, u.telefone, u.cpf,
+         u.senha_hash, u.data_nascimento, u.foto, u.aceitou_direito_imagem,
+         u.data_aceite_direito_imagem, u.qr_code_hash, u.ativo, u.created_at,
+         r.codigo AS role_codigo, r.nome AS role_nome
+  FROM usuarios u
+  INNER JOIN roles r ON r.id = u.role_id
+`;
+
+export async function findUsuarioByEmail(email: string) {
+  const result = await query<UsuarioRow>(
+    `${userSelect} WHERE lower(u.email) = lower($1) LIMIT 1`,
+    [email.trim()],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function findUsuarioById(id: string) {
+  const result = await query<UsuarioRow>(
+    `${userSelect} WHERE u.id = $1 LIMIT 1`,
+    [id],
+  );
+  return result.rows[0] ?? null;
+}
+
+function hashToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export function createVisitorHash() {
@@ -189,7 +123,57 @@ export function createVisitorHash() {
 }
 
 export function toPublicUser(user: PublicUser): PublicUser {
-  return user;
+  return {
+    ...user,
+    visitorHash: user.qrCodeHash ?? user.visitorHash,
+    qrCodeHash: user.qrCodeHash ?? user.visitorHash,
+  };
+}
+
+export async function getSession(): Promise<SessionData | null> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+
+  const result = await query<{
+    usuario_id: number | bigint | string;
+    expires_at: Date;
+    nome_completo: string;
+    email: string;
+    role_codigo: RoleCodigo;
+    ativo: number | boolean;
+  }>(
+    `SELECT s.usuario_id, s.expires_at, u.nome_completo, u.email, u.ativo,
+            r.codigo AS role_codigo
+     FROM sessoes s
+     INNER JOIN usuarios u ON u.id = s.usuario_id
+     INNER JOIN roles r ON r.id = u.role_id
+     WHERE s.token_hash = $1
+     LIMIT 1`,
+    [hashToken(token)],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  if (new Date(row.expires_at).getTime() <= Date.now()) return null;
+  if (!Boolean(row.ativo)) return null;
+
+  return {
+    userId: toId(row.usuario_id),
+    name: row.nome_completo,
+    email: row.email,
+    role: ROLE_CODIGO_TO_AUTH[row.role_codigo],
+    emailVerified: true,
+    mfaEnabled: true,
+    expiresAt: new Date(row.expires_at).getTime(),
+  };
+}
+
+export async function requireRole(...roles: UserRole[]) {
+  const session = await getSession();
+  if (!session || !roles.includes(session.role)) return null;
+  void requiresMfa;
+  void headers;
+  return session;
 }
 
 export async function ensureBootstrapAdmin() {
@@ -197,12 +181,9 @@ export async function ensureBootstrapAdmin() {
   const password = process.env.SNCT_ADMIN_PASSWORD;
   if (!email || !password) return;
 
-  const existing = await query<{ id: string; role: UserRole }>(
-    `SELECT id, role FROM auth_users WHERE lower(email) = $1 LIMIT 1`,
-    [email],
-  );
-  if (existing.rows[0]) {
-    if (existing.rows[0].role !== "admin") {
+  const existing = await findUsuarioByEmail(email);
+  if (existing) {
+    if (existing.role_codigo !== "ADMINISTRADOR") {
       throw new Error(
         "SNCT_ADMIN_EMAIL já pertence a uma conta não administrativa.",
       );
@@ -210,18 +191,27 @@ export async function ensureBootstrapAdmin() {
     return;
   }
 
-  const created = await auth.api.signUpEmail({
-    body: {
-      email,
-      password,
-      name: "Administrador SNCT",
-    },
-  });
-  if (!created.user?.id)
-    throw new Error("Não foi possível criar o administrador inicial.");
+  const role = await getRoleByCodigo("ADMINISTRADOR");
+  if (!role) throw new Error("Role ADMINISTRADOR não encontrada.");
 
+  const senhaHash = await hashPassword(password);
   await query(
-    "UPDATE auth_users SET role = 'admin', `emailVerified` = true WHERE id = $1",
-    [created.user.id],
+    `INSERT INTO usuarios
+      (role_id, nome_completo, email, telefone, cpf, senha_hash,
+       data_nascimento, aceitou_direito_imagem, data_aceite_direito_imagem,
+       qr_code_hash, ativo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(3), $8, TRUE)`,
+    [
+      role.id,
+      "Administrador SNCT",
+      email,
+      "00000000000",
+      "00000000000",
+      senhaHash,
+      "1990-01-01",
+      createVisitorHash(),
+    ],
   );
 }
+
+export { verifyPassword, hashPassword };

@@ -6,30 +6,53 @@ import {
   CheckCircle2,
   Download,
   Gift,
-  Hash,
   QrCode,
   UserRound,
 } from "lucide-react";
 import QRCode from "qrcode";
 
-import { Badge } from "@/components/ui/badge";
 import { AccountSecurity } from "@/components/dashboard/account-security";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PublicUser } from "@/lib/snct-types";
+import { buildCredentialQrPayload } from "@/lib/qr-payload";
 
-function VisitorPass({ visitor }: { visitor: PublicUser }) {
+function VisitorPass({
+  visitor,
+  showSecurity = false,
+}: {
+  visitor: PublicUser;
+  showSecurity?: boolean;
+}) {
   const [qrCode, setQrCode] = useState("");
-  const qrValue = `SNCT:${visitor.visitorHash ?? visitor.id}`;
+  const hash = visitor.qrCodeHash ?? visitor.visitorHash ?? "";
 
   useEffect(() => {
-    QRCode.toDataURL(qrValue, {
+    if (!hash) return;
+    const payload = buildCredentialQrPayload(hash);
+    QRCode.toDataURL(payload, {
       width: 560,
       margin: 2,
       errorCorrectionLevel: "H",
       color: { dark: "#10002b", light: "#f7f7fb" },
     }).then(setQrCode);
-  }, [qrValue]);
+  }, [hash]);
+
+  const roleTitle =
+    visitor.roleNome ??
+    ({
+      admin: "Administrador",
+      staff: "Staff",
+      avaliador: "Avaliador",
+      professor: "Professor",
+      visitante: "Visitante",
+      aluno: "Aluno",
+    }[visitor.role] ?? "Participante");
+
+  const isVisitante = visitor.role === "visitante";
+  const isAluno = visitor.role === "aluno";
+  const isCpfAccess = isVisitante || isAluno;
 
   return (
     <div>
@@ -41,8 +64,11 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
           Olá, {visitor.name.split(" ")[0]}
         </h1>
         <p className="mt-4 leading-7 text-blue-gray">
-          Apresente este QR Code à equipe Staff. Ele é exclusivo, pessoal e
-          vinculado à hash do seu perfil.
+          {isAluno
+            ? "Apresente este QR Code ou informe seu CPF à equipe Staff no check-in."
+            : isVisitante
+              ? "Apresente este QR Code à equipe Staff no check-in."
+              : "Apresente este QR Code à equipe Staff no check-in do evento."}
         </p>
       </div>
 
@@ -58,7 +84,7 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
               <QrCode className="size-5 text-cyan-electric" aria-hidden />
             </div>
             <CardTitle className="mt-4 text-2xl">
-              Credencial de visitante
+              Credencial de {roleTitle.toLowerCase()}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -93,7 +119,7 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
           </CardContent>
         </Card>
 
-        <div className="grid content-start gap-4 sm:grid-cols-2">
+        <div className="grid content-start gap-4">
           <Card>
             <CardContent className="flex items-start gap-4">
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-cyan-electric/10 text-cyan-electric">
@@ -101,31 +127,22 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
               </span>
               <div className="min-w-0">
                 <p className="text-xs tracking-wide text-blue-gray uppercase">
-                  Nome e idade
+                  Nome
                 </p>
                 <p className="mt-1 font-semibold text-ice-white">
                   {visitor.name}
                 </p>
-                <p className="text-sm text-blue-gray">{visitor.age} anos</p>
+                {visitor.dataNascimento ? (
+                  <p className="text-sm text-blue-gray">
+                    Nascimento: {visitor.dataNascimento}
+                  </p>
+                ) : visitor.age ? (
+                  <p className="text-sm text-blue-gray">{visitor.age} anos</p>
+                ) : null}
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="flex items-start gap-4">
-              <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-purple-vibrant/15 text-[#BDA5FF]">
-                <Hash className="size-5" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs tracking-wide text-blue-gray uppercase">
-                  Identificador
-                </p>
-                <p className="mt-1 break-all font-mono text-xs text-ice-white">
-                  {visitor.id}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="sm:col-span-2">
             <CardHeader>
               <CardTitle>Status no evento</CardTitle>
             </CardHeader>
@@ -143,7 +160,7 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
                   <p className="font-semibold text-ice-white">Check-in</p>
                   <p className="text-xs text-blue-gray">
                     {visitor.checkedInAt
-                      ? "Confirmado pela equipe"
+                      ? "Já houve check-in registrado"
                       : "Aguardando chegada"}
                   </p>
                 </div>
@@ -170,7 +187,7 @@ function VisitorPass({ visitor }: { visitor: PublicUser }) {
           </Card>
         </div>
       </div>
-      <AccountSecurity />
+      {showSecurity && !isCpfAccess ? <AccountSecurity /> : null}
     </div>
   );
 }
