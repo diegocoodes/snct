@@ -52,7 +52,11 @@ function VisitorPass({
 
   const isVisitante = visitor.role === "visitante";
   const isAluno = visitor.role === "aluno";
-  const isCpfAccess = isVisitante || isAluno;
+  const isCpfAccess =
+    isVisitante ||
+    isAluno ||
+    visitor.role === "professor" ||
+    visitor.role === "avaliador";
 
   return (
     <div>
@@ -64,11 +68,7 @@ function VisitorPass({
           Olá, {visitor.name.split(" ")[0]}
         </h1>
         <p className="mt-4 leading-7 text-blue-gray">
-          {isAluno
-            ? "Apresente este QR Code ou informe seu CPF à equipe Staff no check-in."
-            : isVisitante
-              ? "Apresente este QR Code à equipe Staff no check-in."
-              : "Apresente este QR Code à equipe Staff no check-in do evento."}
+          Apresente este QR Code ou informe seu CPF à equipe Staff no check-in.
         </p>
       </div>
 
@@ -125,7 +125,7 @@ function VisitorPass({
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-cyan-electric/10 text-cyan-electric">
                 <UserRound className="size-5" aria-hidden />
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs tracking-wide text-blue-gray uppercase">
                   Nome
                 </p>
@@ -139,6 +139,14 @@ function VisitorPass({
                 ) : visitor.age ? (
                   <p className="text-sm text-blue-gray">{visitor.age} anos</p>
                 ) : null}
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-xs tracking-wide text-blue-gray uppercase">
+                  Função
+                </p>
+                <Badge className="mt-1 bg-purple-vibrant text-white">
+                  {roleTitle}
+                </Badge>
               </div>
             </CardContent>
           </Card>

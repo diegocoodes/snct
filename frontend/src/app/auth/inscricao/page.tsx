@@ -14,7 +14,7 @@ const options = [
   {
     href: "/auth/inscricao/professor",
     title: "Professor",
-    description: "Cadastre sua escola, temas e alunos no evento.",
+    description: "Cadastre sua escola, projetos e alunos no evento.",
   },
   {
     href: "/auth/inscricao/visitante",

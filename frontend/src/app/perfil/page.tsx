@@ -78,7 +78,7 @@ export default async function ProfilePage() {
             render={<Link href="/perfil/escola" />}
           >
             <School aria-hidden />
-            Cadastrar escola, temas e alunos
+            Cadastrar escola, projetos e alunos
           </Button>
         </div>
         <VisitorPass visitor={toPublicUser(visitor)} showSecurity={false} />

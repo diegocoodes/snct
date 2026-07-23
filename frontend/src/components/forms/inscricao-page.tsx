@@ -16,7 +16,7 @@ const copy: Record<
     eyebrow: "Inscrição de professor",
     title: "Cadastro de professor",
     description:
-      "Cadastre-se para criar sua escola, temas e alunos — e usar seu QR Code no check-in.",
+      "Cadastre-se para criar sua escola, projetos e alunos — e usar seu QR Code no check-in.",
   },
   VISITANTE: {
     eyebrow: "Inscrição de visitante",

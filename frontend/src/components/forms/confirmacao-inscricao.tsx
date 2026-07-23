@@ -68,7 +68,7 @@ function ConfirmacaoInscricaoClient() {
         isVisitante
           ? `Seu perfil de ${roleLabel} foi criado. Apresente este QR Code no check-in. Para consultá-lo depois, use o CPF no menu Visitante.`
           : isProfessor
-            ? `Seu perfil de ${roleLabel} foi criado. No menu Escola e alunos você cadastra a escola, os temas e os alunos.`
+            ? `Seu perfil de ${roleLabel} foi criado. No menu Escola e alunos você cadastra a escola, os projetos e os alunos.`
             : `Seu perfil de ${roleLabel} foi criado. Apresente este QR Code no check-in diário.`
       }
     >

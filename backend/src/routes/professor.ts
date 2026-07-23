@@ -144,7 +144,7 @@ export async function POST(request: Request) {
       const panelBefore = await getProfessorPanel(session.userId);
       if (!panelBefore.escola) {
         return Response.json(
-          { error: "Cadastre a escola antes de criar temas." },
+          { error: "Cadastre a escola antes de criar projetos." },
           { status: 400 },
         );
       }
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
     if (action === "updateTema") {
       const temaId = typeof body?.temaId === "string" ? body.temaId : "";
       if (!temaId) {
-        return Response.json({ error: "Tema inválido." }, { status: 400 });
+        return Response.json({ error: "Projeto inválido." }, { status: 400 });
       }
       const result = await updateTema(temaId, session.userId, {
         titulo: typeof body?.titulo === "string" ? body.titulo : "",
@@ -208,7 +208,7 @@ export async function DELETE(request: Request) {
     if (action === "deleteTema") {
       const temaId = typeof body?.temaId === "string" ? body.temaId : "";
       if (!temaId) {
-        return Response.json({ error: "Tema inválido." }, { status: 400 });
+        return Response.json({ error: "Projeto inválido." }, { status: 400 });
       }
       const result = await deleteTema(temaId, session.userId);
       if (!result.ok) {

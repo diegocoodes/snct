@@ -78,7 +78,8 @@ function CredencialVisitanteClient({
             Acessar minha credencial
           </h1>
           <p className="mt-4 text-blue-gray">
-            Digite o CPF do visitante ou do aluno para ver o QR Code.
+            Digite o CPF para ver o QR Code — vale para visitante, aluno,
+            professor e avaliador.
           </p>
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
             <div className="space-y-2">

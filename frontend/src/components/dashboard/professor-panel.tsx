@@ -251,7 +251,7 @@ function ProfessorPanel() {
   async function onDeleteEscola() {
     if (
       !window.confirm(
-        "Excluir a escola remove todos os temas e alunos. Continuar?",
+        "Excluir a escola remove todos os projetos e alunos. Continuar?",
       )
     ) {
       return;
@@ -276,7 +276,7 @@ function ProfessorPanel() {
         titulo: temaTitulo,
         descricao: temaDescricao,
       },
-      "Tema cadastrado.",
+      "Projeto cadastrado.",
     );
     if (ok) {
       setTemaTitulo("");
@@ -296,7 +296,7 @@ function ProfessorPanel() {
         titulo: temaTitulo,
         descricao: temaDescricao,
       },
-      "Tema atualizado.",
+      "Projeto atualizado.",
     );
     if (ok) {
       setEditingTemaId(null);
@@ -308,7 +308,7 @@ function ProfessorPanel() {
   async function onDeleteTema(temaId: string) {
     if (
       !window.confirm(
-        "Excluir o tema remove os alunos cadastrados nele. Continuar?",
+        "Excluir o projeto remove os alunos cadastrados nele. Continuar?",
       )
     ) {
       return;
@@ -316,7 +316,7 @@ function ProfessorPanel() {
     await mutateJson(
       "DELETE",
       { action: "deleteTema", temaId },
-      "Tema removido.",
+      "Projeto removido.",
     );
   }
 
@@ -409,7 +409,7 @@ function ProfessorPanel() {
         return;
       }
       applyPanel(data);
-      setMessage("Aluno cadastrado neste tema.");
+      setMessage("Aluno cadastrado neste projeto.");
       formEl.reset();
       setBirth("");
       setPreview(null);
@@ -423,6 +423,64 @@ function ProfessorPanel() {
     }
   }
 
+  function goCadastrarEscola() {
+    setStep("escola");
+    setSelectedTemaId(null);
+    setEditingEscola(true);
+    setError("");
+    setMessage(
+      panel.escola
+        ? "Edite os dados da escola e salve."
+        : "Preencha os dados para cadastrar a escola.",
+    );
+  }
+
+  function goCadastrarProjetos() {
+    if (!panel.escola) {
+      setStep("escola");
+      setEditingEscola(true);
+      setError("Cadastre a escola antes de criar projetos.");
+      return;
+    }
+    setSelectedTemaId(null);
+    setEditingTemaId(null);
+    setTemaTitulo("");
+    setTemaDescricao("");
+    setAddingTema(true);
+    setStep("temas");
+    setError("");
+    setMessage("Preencha o título para cadastrar o projeto.");
+  }
+
+  function goCadastrarAluno() {
+    if (!panel.escola) {
+      setStep("escola");
+      setEditingEscola(true);
+      setError("Cadastre a escola antes de cadastrar alunos.");
+      return;
+    }
+    if (panel.temas.length === 0) {
+      setSelectedTemaId(null);
+      setEditingTemaId(null);
+      setTemaTitulo("");
+      setTemaDescricao("");
+      setAddingTema(true);
+      setStep("temas");
+      setError("Crie um projeto antes de cadastrar alunos.");
+      return;
+    }
+    if (panel.temas.length === 1) {
+      openCadastro(panel.temas[0].id);
+      setMessage("Cadastre o aluno neste projeto.");
+      return;
+    }
+    setSelectedTemaId(null);
+    setAddingTema(false);
+    setStep("temas");
+    setError("");
+    setMessage("Escolha um projeto e clique em Cadastrar alunos.");
+  }
+
   if (loading) {
     return <p className="text-blue-gray">Carregando painel do professor…</p>;
   }
@@ -431,7 +489,7 @@ function ProfessorPanel() {
     step === "escola"
       ? "Sua escola"
       : step === "temas"
-        ? "Temas"
+        ? "Projetos"
         : step === "inscritos"
           ? `Alunos — ${selectedTema?.titulo ?? ""}`
           : `Cadastrar alunos — ${selectedTema?.titulo ?? ""}`;
@@ -447,12 +505,12 @@ function ProfessorPanel() {
         </h1>
         <p className="mt-3 leading-7 text-blue-gray">
           {step === "escola"
-            ? "Edite ou exclua a escola, ou clique nela para ver os temas."
+            ? "Edite ou exclua a escola, ou clique nela para ver os projetos."
             : step === "temas"
-              ? "Edite ou exclua temas, ou abra um tema para cadastrar alunos."
+              ? "Edite ou exclua projetos, ou abra um projeto para cadastrar alunos."
               : step === "inscritos"
-                ? "Alunos já inscritos neste tema."
-                : "Preencha os dados para inscrever um aluno neste tema."}
+                ? "Alunos já inscritos neste projeto."
+                : "Preencha os dados para inscrever um aluno neste projeto."}
         </p>
       </header>
 
@@ -473,7 +531,7 @@ function ProfessorPanel() {
           </button>
           <ChevronRight className="size-4 opacity-50" aria-hidden />
           {step === "temas" ? (
-            <span className="text-ice-white">Temas</span>
+            <span className="text-ice-white">Projetos</span>
           ) : (
             <>
               <button
@@ -484,11 +542,11 @@ function ProfessorPanel() {
                   setSelectedTemaId(null);
                 }}
               >
-                Temas
+                Projetos
               </button>
               <ChevronRight className="size-4 opacity-50" aria-hidden />
               <span className="text-ice-white">
-                {selectedTema?.titulo ?? "Tema"}
+                {selectedTema?.titulo ?? "Projeto"}
               </span>
             </>
           )}
@@ -510,7 +568,22 @@ function ProfessorPanel() {
 
       {/* Escola */}
       {step === "escola" ? (
-        <section className="space-y-4">
+        <section className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="glow" onClick={goCadastrarEscola}>
+              <School className="size-4" aria-hidden />
+              Cadastrar escola
+            </Button>
+            <Button type="button" variant="outline" onClick={goCadastrarProjetos}>
+              <Plus className="size-4" aria-hidden />
+              Cadastrar projetos
+            </Button>
+            <Button type="button" variant="outline" onClick={goCadastrarAluno}>
+              <Users className="size-4" aria-hidden />
+              Cadastrar aluno ao projeto
+            </Button>
+          </div>
+
           {panel.escola && !editingEscola ? (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 sm:p-5">
               <button
@@ -526,7 +599,7 @@ function ProfessorPanel() {
                     {panel.escola.nome}
                   </span>
                   <span className="mt-1 block text-sm text-blue-gray">
-                    Paulista · {panel.temas.length} tema
+                    Paulista · {panel.temas.length} projeto
                     {panel.temas.length === 1 ? "" : "s"}
                   </span>
                 </span>
@@ -631,7 +704,7 @@ function ProfessorPanel() {
                 }}
               >
                 <Plus className="size-4" aria-hidden />
-                Novo tema
+                Novo projeto
               </Button>
             ) : null}
           </div>
@@ -685,7 +758,7 @@ function ProfessorPanel() {
 
           {panel.temas.length === 0 ? (
             <p className="text-sm text-blue-gray">
-              Nenhum tema ainda. Crie o primeiro para cadastrar alunos.
+              Nenhum projeto ainda. Crie o primeiro para cadastrar alunos.
             </p>
           ) : (
             <ul className="space-y-2">
@@ -760,7 +833,7 @@ function ProfessorPanel() {
               }}
             >
               <ArrowLeft className="size-4" aria-hidden />
-              Voltar aos temas
+              Voltar aos projetos
             </Button>
             <Button
               type="button"
@@ -769,13 +842,13 @@ function ProfessorPanel() {
               onClick={() => setStep("inscritos")}
             >
               <Users className="size-4" aria-hidden />
-              Ver alunos inscritos no tema
+              Ver alunos inscritos no projeto
               {alunos.length > 0 ? ` (${alunos.length})` : ""}
             </Button>
           </div>
 
           <div className="rounded-2xl border border-cyan-electric/25 bg-cyan-electric/[0.05] px-4 py-3 text-sm text-cyan-100">
-            Você está cadastrando alunos no tema{" "}
+            Você está cadastrando alunos no projeto{" "}
             <strong className="text-ice-white">{selectedTema.titulo}</strong>.
           </div>
 
@@ -941,7 +1014,7 @@ function ProfessorPanel() {
                 ) : (
                   <Plus className="size-4" aria-hidden />
                 )}
-                Cadastrar aluno neste tema
+                Cadastrar aluno neste projeto
               </Button>
             </div>
           </form>
@@ -979,7 +1052,7 @@ function ProfessorPanel() {
 
           {alunos.length === 0 ? (
             <p className="rounded-xl border border-dashed border-white/15 px-4 py-6 text-sm text-blue-gray">
-              Nenhum aluno inscrito neste tema ainda.
+              Nenhum aluno inscrito neste projeto ainda.
             </p>
           ) : (
             <ul className="divide-y divide-white/10 border-y border-white/10">

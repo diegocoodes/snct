@@ -294,7 +294,7 @@ export async function createTema(
   const titulo = input.titulo.trim();
   const descricao = input.descricao?.trim() || null;
   if (titulo.length < 2) {
-    return { ok: false as const, status: 400, error: "Informe o título do tema." };
+    return { ok: false as const, status: 400, error: "Informe o título do projeto." };
   }
 
   await query(
@@ -313,13 +313,13 @@ export async function updateTema(
 ) {
   const owned = await assertTemaOwnedByProfessor(temaId, professorId);
   if (!owned) {
-    return { ok: false as const, status: 404, error: "Tema não encontrado." };
+    return { ok: false as const, status: 404, error: "Projeto não encontrado." };
   }
 
   const titulo = input.titulo.trim();
   const descricao = input.descricao?.trim() || null;
   if (titulo.length < 2) {
-    return { ok: false as const, status: 400, error: "Informe o título do tema." };
+    return { ok: false as const, status: 400, error: "Informe o título do projeto." };
   }
 
   await query(
@@ -341,7 +341,7 @@ export async function deleteTema(temaId: string, professorId: string) {
     [temaId, professorId],
   );
   if (!owned.rows[0]) {
-    return { ok: false as const, status: 404, error: "Tema não encontrado." };
+    return { ok: false as const, status: 404, error: "Projeto não encontrado." };
   }
 
   const alunos = await query<{ usuario_id: number }>(
@@ -452,7 +452,7 @@ export async function createAluno(
 ) {
   const owned = await assertTemaOwnedByProfessor(temaId, professorId);
   if (!owned) {
-    return { ok: false as const, status: 404, error: "Tema não encontrado." };
+    return { ok: false as const, status: 404, error: "Projeto não encontrado." };
   }
 
   const nomeCompleto = input.nomeCompleto.trim();

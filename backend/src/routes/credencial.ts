@@ -64,7 +64,9 @@ export async function POST_VISITANTE_CPF(request: Request) {
               ) AS checkin_hoje
        FROM usuarios u
        INNER JOIN roles r ON r.id = u.role_id
-       WHERE u.cpf = $1 AND r.codigo IN ('VISITANTE', 'ALUNO') AND u.ativo = TRUE
+       WHERE u.cpf = $1
+         AND r.codigo IN ('VISITANTE', 'ALUNO', 'PROFESSOR', 'AVALIADOR')
+         AND u.ativo = TRUE
        LIMIT 1`,
       [cpf],
     );
